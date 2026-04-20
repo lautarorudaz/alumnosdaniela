@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../firebase/firestore";
+import RutinaEditor, { emptyRutina } from "../components/RutinaEditor";
 
 const METODOLOGIAS = ["Presencial", "A distancia", "Híbrido"];
 
@@ -11,6 +12,7 @@ const emptyForm = {
 
 export default function Inicio() {
     const [alumnos, setAlumnos] = useState([]);
+    const [rutinasGenericas, setRutinasGenericas] = useState([]);
     const [busqueda, setBusqueda] = useState("");
     const [filtro, setFiltro] = useState("todos");
     const [showModal, setShowModal] = useState(false);
@@ -18,9 +20,18 @@ export default function Inicio() {
     const [form, setForm] = useState(emptyForm);
     const [confirmDel, setConfirmDel] = useState(null);
 
+    // Asignación de rutina
+    const [alumnoParaRutina, setAlumnoParaRutina] = useState(null);
+    const [showSelectTemplate, setShowSelectTemplate] = useState(false);
+    const [showEditor, setShowEditor] = useState(false);
+    const [rutinaEditing, setRutinaEditing] = useState(null);
+
     const fetchAlumnos = async () => {
         const snap = await getDocs(collection(db, "alumnos"));
         setAlumnos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        const rSnap = await getDocs(collection(db, "rutinas"));
+        setRutinasGenericas(rSnap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
 
     useEffect(() => { fetchAlumnos(); }, []);
@@ -58,6 +69,21 @@ export default function Inicio() {
         await deleteDoc(doc(db, "alumnos", id));
         setConfirmDel(null);
         fetchAlumnos();
+    };
+
+    const handleSelectPlantilla = (genId) => {
+        const r = rutinasGenericas.find(rg => rg.id === genId);
+        if (r) {
+            setShowSelectTemplate(false);
+            setRutinaEditing(JSON.parse(JSON.stringify({ nombre: r.nombre, semanas: r.semanas })));
+            setShowEditor(true);
+        }
+    };
+
+    const openCrearDeCero = () => {
+        setShowSelectTemplate(false);
+        setRutinaEditing(emptyRutina());
+        setShowEditor(true);
     };
 
     return (
@@ -130,15 +156,27 @@ export default function Inicio() {
                                     </td>
                                     <td style={styles.td}>
                                         <div style={styles.acciones}>
-                                            {/* Editar */}
                                             <button title="Editar alumno" style={styles.iconBtn} onClick={() => openEditar(a)}>
                                                 <EditIcon />
                                             </button>
-                                            {/* Rutina */}
-                                            <button title="Asignar rutina" style={{ ...styles.iconBtn, color: "var(--color-primary-2)" }}>
-                                                <RutinaIcon />
-                                            </button>
-                                            {/* Eliminar */}
+                                            
+                                            {a.rutina ? (
+                                                <button title="Ver / Editar rutina asignada" style={{ ...styles.iconBtn, color: "var(--color-primary)" }} onClick={() => {
+                                                    setAlumnoParaRutina(a);
+                                                    setRutinaEditing(a.rutina);
+                                                    setShowEditor(true);
+                                                }}>
+                                                    <ViewIcon />
+                                                </button>
+                                            ) : (
+                                                <button title="Asignar rutina" style={{ ...styles.iconBtn, color: "var(--color-primary-2)" }} onClick={() => {
+                                                    setAlumnoParaRutina(a);
+                                                    setShowSelectTemplate(true);
+                                                }}>
+                                                    <RutinaIcon />
+                                                </button>
+                                            )}
+
                                             <button title="Eliminar alumno" style={{ ...styles.iconBtn, color: "#c0392b" }} onClick={() => setConfirmDel(a)}>
                                                 <DeleteIcon />
                                             </button>
@@ -150,6 +188,59 @@ export default function Inicio() {
                     </table>
                 </div>
             </div>
+
+            {/* MODAL ASIGNAR RUTINA (ELIGIR MÉTODO) */}
+            {showSelectTemplate && (
+                <div style={styles.overlay}>
+                    <div style={{ ...styles.modal, maxWidth: "400px" }}>
+                        <h2 style={styles.modalTitle}>Asignar rutina a {alumnoParaRutina?.nombre}</h2>
+                        
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 20 }}>
+                            <button 
+                                style={{ ...styles.btnGuardar, width: "100%", background: "var(--color-primary-2)" }}
+                                onClick={openCrearDeCero}
+                            >
+                                ✨ Crear rutina desde cero
+                            </button>
+
+                            <div style={{ margin: "10px 0", textAlign: "center", color: "var(--color-text-muted)", fontSize: 13, fontWeight: 500 }}>
+                                o usar una plantilla genérica
+                            </div>
+
+                            <div style={styles.formField}>
+                                <select 
+                                    style={styles.formInput}
+                                    defaultValue=""
+                                    onChange={(e) => handleSelectPlantilla(e.target.value)}
+                                >
+                                    <option value="" disabled>-- Selecciona una rutina --</option>
+                                    {rutinasGenericas.map(rg => (
+                                        <option key={rg.id} value={rg.id}>{rg.nombre}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style={{ ...styles.modalActions, marginTop: "24px" }}>
+                            <button style={styles.btnCancelar} onClick={() => setShowSelectTemplate(false)}>Cancelar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* RUTINA EDITOR */}
+            {showEditor && (
+                <RutinaEditor
+                    rutinaInicial={rutinaEditing}
+                    titulo={`Rutina de ${alumnoParaRutina?.nombre}`}
+                    onClose={() => setShowEditor(false)}
+                    onSave={async (rutinaFinal) => {
+                        await updateDoc(doc(db, "alumnos", alumnoParaRutina.id), { rutina: rutinaFinal });
+                        setShowEditor(false);
+                        fetchAlumnos();
+                    }}
+                />
+            )}
 
             {/* MODAL AGREGAR / EDITAR */}
             {showModal && (
@@ -218,7 +309,7 @@ function StatCard({ label, value, color }) {
 // Íconos SVG simples
 function EditIcon() {
     return (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
         </svg>
@@ -226,7 +317,7 @@ function EditIcon() {
 }
 function RutinaIcon() {
     return (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />
             <line x1="9" y1="13" x2="15" y2="13" />
@@ -234,13 +325,21 @@ function RutinaIcon() {
         </svg>
     );
 }
-function DeleteIcon({ size = 16, color = "currentColor" }) {
+function DeleteIcon({ size = 15, color = "currentColor" }) {
     return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="3 6 5 6 21 6" />
             <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
             <path d="M10 11v6M14 11v6" />
             <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+        </svg>
+    );
+}
+function ViewIcon() {
+    return (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
         </svg>
     );
 }
@@ -266,7 +365,7 @@ const styles = {
     badge: { display: "inline-block", padding: "3px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: "500" },
     acciones: { display: "flex", gap: "8px", alignItems: "center" },
     iconBtn: { background: "none", border: "none", cursor: "pointer", color: "var(--color-primary)", padding: "4px", borderRadius: "4px", display: "flex", alignItems: "center" },
-    overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 },
+    overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "1rem" },
     modal: { background: "white", borderRadius: "var(--radius-lg)", padding: "2rem", width: "100%", maxWidth: "440px", boxShadow: "0 8px 32px rgba(0,0,0,0.12)" },
     modalTitle: { fontSize: "18px", fontWeight: "600", color: "var(--color-primary)", margin: "0 0 1.5rem" },
     formField: { marginBottom: "1rem" },
