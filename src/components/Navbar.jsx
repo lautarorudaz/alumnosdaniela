@@ -1,9 +1,8 @@
-import { useAuth } from "../hooks/useAuth";
+import { NavLink } from "react-router-dom";
 import { logout } from "../firebase/auth";
 import { useNavigate } from "react-router-dom";
 
 export default function Navbar() {
-    const { user } = useAuth();
     const navigate = useNavigate();
 
     const handleLogout = async () => {
@@ -11,16 +10,34 @@ export default function Navbar() {
         navigate("/login");
     };
 
+    const linkStyle = ({ isActive }) => ({
+        color: isActive ? "var(--color-accent)" : "white",
+        textDecoration: "none",
+        fontSize: "14px",
+        fontWeight: "500",
+        letterSpacing: "0.04em",
+        paddingBottom: "2px",
+        borderBottom: isActive ? "2px solid var(--color-accent)" : "2px solid transparent",
+        transition: "all 0.2s",
+    });
+
     return (
         <nav style={styles.nav}>
-            <div style={styles.brand}>
-                <span style={styles.dot1} />
-                <span style={styles.dot2} />
-                <span style={styles.title}>Daniela en Movimiento</span>
-            </div>
-            <div style={styles.right}>
-                {user && <span style={styles.email}>{user.email}</span>}
-                <button onClick={handleLogout} style={styles.btn}>Cerrar sesión</button>
+            <div style={styles.inner}>
+
+                <img src="/logo.png" alt="Logo" style={styles.logo} />
+
+                <div style={styles.links}>
+                    <NavLink to="/inicio" style={linkStyle}>INICIO</NavLink>
+                    <NavLink to="/ejercicios" style={linkStyle}>EJERCICIOS</NavLink>
+                    <NavLink to="/rutinas" style={linkStyle}>RUTINAS</NavLink>
+                    <NavLink to="/comentarios" style={linkStyle}>COMENTARIOS</NavLink>
+                </div>
+
+                <button onClick={handleLogout} style={styles.btn}>
+                    Cerrar sesión
+                </button>
+
             </div>
         </nav>
     );
@@ -29,31 +46,41 @@ export default function Navbar() {
 const styles = {
     nav: {
         background: "var(--color-primary)",
-        color: "#fff",
-        padding: "0 1.5rem",
+        padding: "0 2rem",
         height: "60px",
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between",
         position: "sticky",
         top: 0,
         zIndex: 100,
-        boxShadow: "0 2px 10px rgba(2,104,66,0.3)",
     },
-    brand: { display: "flex", alignItems: "center", gap: "8px" },
-    dot1: { width: 10, height: 10, borderRadius: "50%", background: "var(--color-accent)", display: "inline-block" },
-    dot2: { width: 10, height: 10, borderRadius: "50%", background: "var(--color-primary-3)", display: "inline-block" },
-    title: { fontWeight: 700, fontSize: "16px", letterSpacing: "0.03em" },
-    right: { display: "flex", alignItems: "center", gap: "12px" },
-    email: { fontSize: "13px", opacity: 0.85 },
+    inner: {
+        width: "100%",
+        maxWidth: "1200px",
+        margin: "0 auto",
+        display: "grid",
+        gridTemplateColumns: "80px 1fr 140px",
+        alignItems: "center",
+    },
+    logo: {
+        height: "50px",
+        objectFit: "contain",
+    },
+    links: {
+        display: "flex",
+        gap: "2.5rem",
+        justifyContent: "center",
+        alignItems: "center",
+    },
     btn: {
-        padding: "6px 14px",
-        background: "var(--color-accent)",
-        color: "#013d27",
-        border: "none",
-        borderRadius: "6px",
-        fontWeight: 600,
+        background: "transparent",
+        border: "1.5px solid var(--color-accent)",
+        color: "var(--color-accent)",
+        borderRadius: "var(--radius-sm)",
+        padding: "7px 16px",
         fontSize: "13px",
+        fontWeight: "500",
         cursor: "pointer",
+        justifySelf: "end",
     },
 };

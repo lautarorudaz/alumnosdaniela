@@ -16,7 +16,7 @@ export default function Login() {
         setLoading(true);
         try {
             await login(email, password);
-            navigate("/dashboard");
+            navigate("/inicio");
         } catch (err) {
             setError("Correo o contraseña incorrectos.");
         } finally {
@@ -30,14 +30,10 @@ export default function Login() {
 
                 <img src="/logo.png" alt="Logo Daniela en Movimiento" style={styles.logo} />
 
-                <h1 style={styles.title}>DANIELA EN MOVIMIENTO</h1>
+
                 <p style={styles.subtitle}>Acceso exclusivo · Panel de profesora</p>
 
-                <div style={styles.strip}>
-                    {["#026842", "#009d71", "#5ccda7", "#efb810", "#f9db5c"].map(c => (
-                        <div key={c} style={{ ...styles.dot, background: c }} />
-                    ))}
-                </div>
+
 
                 <form onSubmit={handleSubmit} style={styles.form}>
                     <div style={styles.field}>
@@ -96,13 +92,12 @@ const styles = {
         flexDirection: "column",
         alignItems: "center",
     },
+    // Reemplazá styles.logo con esto:
     logo: {
-        width: "80px",
-        height: "80px",
+        width: "110px",
+        height: "110px",
         objectFit: "contain",
-        borderRadius: "50%",
         marginBottom: "1.25rem",
-        border: "3px solid var(--color-primary-3)",
     },
     title: {
         fontSize: "18px",

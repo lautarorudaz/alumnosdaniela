@@ -2,7 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import PrivateRoute from "./components/PrivateRoute";
 import Login from "./pages/Login";
+import Inicio from "./pages/Inicio";
 import Dashboard from "./pages/Dashboard";
+import Ejercicios from "./pages/Ejercicios";
 
 export default function App() {
     return (
@@ -10,15 +12,10 @@ export default function App() {
             <BrowserRouter>
                 <Routes>
                     <Route path="/login" element={<Login />} />
-                    <Route
-                        path="/dashboard"
-                        element={
-                            <PrivateRoute>
-                                <Dashboard />
-                            </PrivateRoute>
-                        }
-                    />
-                    <Route path="*" element={<Navigate to="/login" replace />} />
+                    <Route path="/inicio" element={<PrivateRoute><Inicio /></PrivateRoute>} />
+                    <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+                    <Route path="/ejercicios" element={<PrivateRoute><Ejercicios /></PrivateRoute>} />
+                    <Route path="*" element={<Navigate to="/inicio" replace />} />
                 </Routes>
             </BrowserRouter>
         </AuthProvider>
