@@ -276,6 +276,7 @@ export default function Ejercicios() {
 
 // ── CARD ─────────────────────────────────────────────────────────────────────
 function EjercicioCard({ ejercicio, onEditar, onEliminar }) {
+    const [showVideo, setShowVideo] = useState(false);
     const embedUrl = getYoutubeEmbedUrl(ejercicio.youtubeUrl);
 
     return (
@@ -283,13 +284,25 @@ function EjercicioCard({ ejercicio, onEditar, onEliminar }) {
             {/* VIDEO O PLACEHOLDER */}
             <div style={styles.videoWrap}>
                 {embedUrl ? (
-                    <iframe
-                        src={embedUrl}
-                        title={ejercicio.nombre}
-                        style={styles.iframe}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                    />
+                    showVideo ? (
+                        <iframe
+                            src={embedUrl}
+                            title={ejercicio.nombre}
+                            style={styles.iframe}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                        />
+                    ) : (
+                        <div style={styles.videoPlaceholder}>
+                            <YoutubeIcon />
+                            <button
+                                onClick={() => setShowVideo(true)}
+                                style={styles.btnPreview}
+                            >
+                                Ver Preview
+                            </button>
+                        </div>
+                    )
                 ) : (
                     <div style={styles.videoPlaceholder}>
                         <YoutubeIcon />
@@ -417,4 +430,5 @@ const styles = {
     modalActions: { display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "1.5rem" },
     btnCancelar: { padding: "10px 20px", background: "white", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", fontSize: "14px", cursor: "pointer", color: "var(--color-text)" },
     btnGuardar: { padding: "10px 20px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-sm)", fontSize: "14px", fontWeight: "500", cursor: "pointer" },
+    btnPreview: { marginTop: "12px", padding: "6px 16px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-sm)", fontSize: "12px", cursor: "pointer", fontWeight: "600", letterSpacing: "0.03em" },
 };
