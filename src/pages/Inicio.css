@@ -1,0 +1,213 @@
+/* CONTENEDOR PRINCIPAL */
+.inicio-page {
+    padding: 1.5rem;
+}
+
+/* STATS */
+.inicio-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+/* TOOLBAR & FILTROS */
+.inicio-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.toolbar-main-row {
+    display: flex;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.inicio-search {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    outline: none;
+    background: white;
+}
+
+.btn-toggle-filtros {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    background: white;
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-primary);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.btn-toggle-filtros.active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
+.inicio-filtros-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filtro-btn {
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1.5px solid var(--color-border);
+    background: white;
+    color: var(--color-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filtro-btn.active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
+.btn-nuevo-alumno {
+    width: 100%;
+    padding: 12px;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    margin-top: 4px;
+}
+
+/* CARDS MOBILE */
+.alumno-card-mobile {
+    background: white;
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    border-left: 5px solid var(--color-primary-2);
+    margin-bottom: 1rem;
+}
+
+.alumno-mobile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+}
+
+.alumno-mobile-name {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--color-primary);
+    margin: 0;
+}
+
+.alumno-mobile-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.alumno-mobile-label {
+    font-size: 11px;
+    color: var(--color-primary-2);
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+
+.alumno-mobile-value {
+    font-size: 15px;
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+.alumno-mobile-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 1rem;
+    border-top: 1px solid #eafaf4;
+}
+
+/* CORRECCIÓN MODALES */
+[style*="position: fixed"][style*="inset: 0"] {
+    padding-top: 80px !important; /* Espacio para que no toque el navbar */
+    padding-bottom: 40px !important;
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+}
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+    .inicio-stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .table-desktop {
+        display: none;
+    }
+
+    .inicio-filtros-panel {
+        display: none;
+        background: #f6fdf9;
+        padding: 12px;
+        border-radius: var(--radius-sm);
+        border: 1.5px solid var(--color-border);
+    }
+
+    .inicio-filtros-panel.open {
+        display: flex;
+    }
+}
+
+@media (min-width: 901px) {
+    .alumnos-list-mobile {
+        display: none;
+    }
+
+    .inicio-toolbar {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .toolbar-main-row {
+        width: auto;
+        flex: 1;
+    }
+
+    .btn-toggle-filtros {
+        display: none;
+    }
+
+    .inicio-filtros-panel {
+        display: flex !important;
+    }
+
+    .btn-nuevo-alumno {
+        width: auto;
+        padding: 10px 24px;
+        margin-top: 0;
+    }
+}

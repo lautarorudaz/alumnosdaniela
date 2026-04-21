@@ -542,7 +542,7 @@ function PickerFiltros({ filtroEtapa, filtroGrupo, onEtapa, onGrupo, onLimpiar }
 }
 
 const S = {
-    overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 200, overflowY: "auto", padding: "2rem 1rem" },
+    overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 200, overflowY: "auto", padding: "60px 1rem 2rem" },
     editor: { background: "white", borderRadius: "var(--radius-lg)", padding: "2rem", width: "100%", maxWidth: 900, marginTop: "auto", marginBottom: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.12)" },
     editorHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" },
     editorTitle: { fontSize: 18, fontWeight: 600, color: "var(--color-primary)", margin: 0 },
