@@ -5,7 +5,7 @@ import { db } from "../firebase/firestore";
 const ETAPAS = ["Movilidad", "Activación", "Trabajo Central"];
 const GRUPOS_PICKER = ["Pecho", "Hombro", "Espalda", "Tríceps", "Bíceps", "Antebrazo", "Cadera", "Cuádriceps", "Isquiotibiales", "Pantorrillas", "Abdomen", "Otros"];
 
-const emptyEjercicio = { nombre: "", series: "", reps: "", observacion: "" };
+const emptyEjercicio = { nombre: "", series: "", reps: "", observacion: "", youtubeUrl: "" };
 
 export function crearDia(numDia) {
     return {
@@ -147,7 +147,12 @@ export default function RutinaEditor({ rutinaInicial, titulo, onClose, onSave })
         }));
 
     const addEjercicio = (semanaId, diaId, etapaNombre, ejercicioBase) => {
-        const nuevo = { ...emptyEjercicio, nombre: ejercicioBase?.nombre || "", id: crypto.randomUUID() };
+        const nuevo = { 
+            ...emptyEjercicio, 
+            nombre: ejercicioBase?.nombre || "", 
+            youtubeUrl: ejercicioBase?.youtubeUrl || "", 
+            id: crypto.randomUUID() 
+        };
         setRutina(r => ({
             ...r,
             semanas: r.semanas.map(s =>
