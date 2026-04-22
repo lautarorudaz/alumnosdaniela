@@ -3,12 +3,13 @@ import Navbar from "../components/Navbar";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../firebase/firestore";
 import RutinaEditor, { emptyRutina } from "../components/RutinaEditor";
+import { generateId } from "../utils/uuid";
 import "./Inicio.css";
 
 const METODOLOGIAS = ["Presencial", "A distancia", "Híbrido"];
 
 const emptyForm = {
-    nombre: "", apellido: "", edad: "", metodologia: "Presencial", telefono: "",
+    nombre: "", apellido: "", edad: "", metodologia: "Presencial", telefono: "54",
 };
 
 export default function Inicio() {
@@ -81,7 +82,7 @@ export default function Inicio() {
         if (editando) {
             await updateDoc(doc(db, "alumnos", editando), form);
         } else {
-            const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+            const token = generateId().replace(/-/g, "").slice(0, 12);
             await addDoc(collection(db, "alumnos"), { ...form, rutina: null, tokenRutina: token });
         }
         setShowModal(false);
@@ -344,7 +345,7 @@ export default function Inicio() {
                     onClose={() => setShowEditor(false)}
                     onSave={async (rutinaFinal) => {
                         const updates = { rutina: rutinaFinal };
-                        if (!alumnoParaRutina.tokenRutina) updates.tokenRutina = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+                        if (!alumnoParaRutina.tokenRutina) updates.tokenRutina = generateId().replace(/-/g, "").slice(0, 12);
                         await updateDoc(doc(db, "alumnos", alumnoParaRutina.id), updates);
                         setShowEditor(false);
                         fetchAlumnos();

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase/firestore";
+import { generateId } from "../utils/uuid";
+import "./RutinaEditor.css";
 
 const ETAPAS = ["Movilidad", "Activación", "Trabajo Central"];
 const GRUPOS_PICKER = ["Pecho", "Hombro", "Espalda", "Tríceps", "Bíceps", "Antebrazo", "Cadera", "Cuádriceps", "Isquiotibiales", "Pantorrillas", "Abdomen", "Otros"];
@@ -9,7 +11,7 @@ const emptyEjercicio = { nombre: "", series: "", reps: "", observacion: "", yout
 
 export function crearDia(numDia) {
     return {
-        id: crypto.randomUUID(),
+        id: generateId(),
         nombre: `Día ${numDia}`,
         etapas: ETAPAS.map(e => ({ nombre: e, ejercicios: [] })),
     };
@@ -17,7 +19,7 @@ export function crearDia(numDia) {
 
 export function crearSemana(numSemana, diasPorSemana) {
     return {
-        id: crypto.randomUUID(),
+        id: generateId(),
         nombre: `Semana ${numSemana}`,
         dias: Array.from({ length: diasPorSemana }, (_, i) => crearDia(i + 1)),
     };
@@ -151,7 +153,7 @@ export default function RutinaEditor({ rutinaInicial, titulo, onClose, onSave })
             ...emptyEjercicio, 
             nombre: ejercicioBase?.nombre || "", 
             youtubeUrl: ejercicioBase?.youtubeUrl || "", 
-            id: crypto.randomUUID() 
+            id: generateId() 
         };
         setRutina(r => ({
             ...r,
@@ -225,8 +227,8 @@ export default function RutinaEditor({ rutinaInicial, titulo, onClose, onSave })
     };
 
     return (
-        <div style={S.overlay}>
-            <div style={S.editor}>
+        <div className="rutina-editor-overlay">
+            <div className="rutina-editor-container" style={S.editor}>
                 <div style={S.editorHeader}>
                     <h2 style={S.editorTitle}>{titulo}</h2>
                     <button style={S.btnClose} onClick={onClose}>✕</button>
@@ -245,7 +247,7 @@ export default function RutinaEditor({ rutinaInicial, titulo, onClose, onSave })
                 {rutina.semanas.map((semana) => {
                     const semanaColapsada = isColapsado(semana.id);
                     return (
-                        <div key={semana.id} style={S.semanaBox}>
+                        <div key={semana.id} className="semana-box" style={S.semanaBox}>
                             <div style={S.semanaHeader}>
                                 <button style={S.semanaToggle} onClick={() => toggleColapso(semana.id)}>
                                     <ChevronIcon open={!semanaColapsada} />
@@ -269,12 +271,12 @@ export default function RutinaEditor({ rutinaInicial, titulo, onClose, onSave })
                             </div>
 
                             {!semanaColapsada && (
-                                <div style={S.diasWrap}>
+                                <div className="dias-wrap" style={S.diasWrap}>
                                     {semana.dias.map((dia) => {
                                         const diaColapsado = isColapsado(dia.id);
                                         const totalEj = dia.etapas.reduce((acc, e) => acc + e.ejercicios.length, 0);
                                         return (
-                                            <div key={dia.id} style={S.diaCard}>
+                                            <div key={dia.id} className="dia-card" style={S.diaCard}>
                                                 <div style={S.diaHeader}>
                                                     <button style={S.diaToggle} onClick={() => toggleColapso(dia.id)}>
                                                         <ChevronIcon open={!diaColapsado} />
@@ -298,40 +300,52 @@ export default function RutinaEditor({ rutinaInicial, titulo, onClose, onSave })
                                                         <p style={S.etapaLabel}>{etapa.nombre}</p>
 
                                                         {etapa.ejercicios.map(ej => (
-                                                            <div key={ej.id} style={S.ejWrap}>
-                                                                <div style={S.ejFila1}>
-                                                                    <input
-                                                                        style={{ ...S.ejInput, flex: 3, minWidth: 0 }}
-                                                                        placeholder="Nombre del ejercicio"
-                                                                        value={ej.nombre}
-                                                                        onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "nombre", e.target.value)}
-                                                                    />
-                                                                    <input
-                                                                        style={{ ...S.ejInput, flex: 1, minWidth: 80 }}
-                                                                        placeholder="Series"
-                                                                        value={ej.series}
-                                                                        onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "series", e.target.value)}
-                                                                    />
-                                                                    <span style={S.ejSep}>×</span>
-                                                                    <input
-                                                                        style={{ ...S.ejInput, flex: 1, minWidth: 80 }}
-                                                                        placeholder="Reps"
-                                                                        value={ej.reps}
-                                                                        onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "reps", e.target.value)}
-                                                                    />
-                                                                    <button
-                                                                        style={{ ...S.iconBtn, color: "#c0392b", flexShrink: 0 }}
-                                                                        onClick={() => removeEjercicio(semana.id, dia.id, etapa.nombre, ej.id)}
-                                                                    >
-                                                                        <DeleteIcon size={13} />
-                                                                    </button>
+                                                            <div key={ej.id} className="ej-wrap" style={S.ejWrap}>
+                                                                <div className="ej-grid-container">
+                                                                    <div className="ej-main-inputs">
+                                                                        <div className="ej-col-nombre">
+                                                                            <input
+                                                                                style={{ ...S.ejInput, width: "100%" }}
+                                                                                placeholder="Nombre del ejercicio"
+                                                                                value={ej.nombre}
+                                                                                onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "nombre", e.target.value)}
+                                                                            />
+                                                                        </div>
+                                                                        <div className="ej-col-series">
+                                                                            <div className="ej-series-reps">
+                                                                                <input
+                                                                                    style={S.ejInput}
+                                                                                    placeholder="Series"
+                                                                                    value={ej.series}
+                                                                                    onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "series", e.target.value)}
+                                                                                />
+                                                                                <span style={S.ejSep}>×</span>
+                                                                                <input
+                                                                                    style={S.ejInput}
+                                                                                    placeholder="Reps"
+                                                                                    value={ej.reps}
+                                                                                    onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "reps", e.target.value)}
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="ej-col-delete">
+                                                                            <button
+                                                                                style={{ ...S.iconBtn, color: "#c0392b" }}
+                                                                                onClick={() => removeEjercicio(semana.id, dia.id, etapa.nombre, ej.id)}
+                                                                            >
+                                                                                <DeleteIcon size={13} />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="ej-row-observacion">
+                                                                        <input
+                                                                            style={{ ...S.ejInput, width: "100%", boxSizing: "border-box" }}
+                                                                            placeholder="Observación (opcional)..."
+                                                                            value={ej.observacion}
+                                                                            onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "observacion", e.target.value)}
+                                                                        />
+                                                                    </div>
                                                                 </div>
-                                                                <input
-                                                                    style={{ ...S.ejInput, width: "100%", marginTop: 6, boxSizing: "border-box" }}
-                                                                    placeholder="Observación (opcional)..."
-                                                                    value={ej.observacion}
-                                                                    onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "observacion", e.target.value)}
-                                                                />
                                                             </div>
                                                         ))}
 
@@ -543,7 +557,7 @@ function PickerFiltros({ filtroEtapa, filtroGrupo, onEtapa, onGrupo, onLimpiar }
 
 const S = {
     overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 200, overflowY: "auto", padding: "60px 1rem 2rem" },
-    editor: { background: "white", borderRadius: "var(--radius-lg)", padding: "2rem", width: "100%", maxWidth: 900, marginTop: "auto", marginBottom: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.12)" },
+    editor: { background: "white", borderRadius: "var(--radius-lg)", padding: "2rem", width: "100%", maxWidth: 1100, marginTop: "auto", marginBottom: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.12)" },
     editorHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" },
     editorTitle: { fontSize: 18, fontWeight: 600, color: "var(--color-primary)", margin: 0 },
     btnClose: { background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--color-text-muted)", lineHeight: 1 },
@@ -559,7 +573,7 @@ const S = {
     semanaTitle: { fontSize: 14, fontWeight: 600, color: "var(--color-primary)" },
     semanaResumen: { fontSize: 12, color: "var(--color-text-muted)", fontWeight: 400 },
     btnAddDia: { fontSize: 12, color: "var(--color-primary-2)", background: "white", border: "1.5px solid var(--color-border)", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontWeight: 500 },
-    diasWrap: { display: "flex", flexDirection: "column", gap: 10, padding: "12px" },
+    diasWrap: { display: "flex", flexDirection: "column", gap: 10, padding: "8px" },
     diaCard: { background: "#f9fffe", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "12px 14px", width: "100%" },
     diaHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
     diaToggle: { display: "flex", alignItems: "center", gap: 7, background: "none", border: "none", cursor: "pointer", color: "var(--color-primary)", flex: 1, padding: 0 },

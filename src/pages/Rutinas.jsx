@@ -3,6 +3,7 @@ import Navbar from "../components/Navbar";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../firebase/firestore";
 import RutinaEditor, { emptyRutina } from "../components/RutinaEditor";
+import { generateId } from "../utils/uuid";
 
 const ETAPAS = ["Movilidad", "Activación", "Trabajo Central"];
 
@@ -44,8 +45,8 @@ export default function Rutinas() {
         setRutinaActual({
             nombre: `${r.nombre} (copia)`,
             semanas: JSON.parse(JSON.stringify(r.semanas)).map(s => ({
-                ...s, id: crypto.randomUUID(),
-                dias: s.dias.map(d => ({ ...d, id: crypto.randomUUID() })),
+                ...s, id: generateId(),
+                dias: s.dias.map(d => ({ ...d, id: generateId() })),
             })),
         });
         setEditandoId(null);
