@@ -7,7 +7,7 @@
     display: flex;
     align-items: center;
     padding: 0 1.5rem;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
 .navbar-inner {
@@ -139,14 +139,46 @@
     }
 
     .navbar-actions {
-        display: none; /* Logout handled inside menu if needed or hidden */
+        display: none;
+        /* Logout handled inside menu if needed or hidden */
     }
-    
+
     /* Logout inside menu */
     .navbar-links .navbar-logout-btn {
         margin-top: auto;
         width: 100%;
         padding: 14px;
         font-size: 16px;
+    }
+}
+
+
+.navbar-brand {
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.navbar-logo-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mobile-logout {
+    margin-top: 2rem;
+    width: 100%;
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .navbar-brand {
+        font-size: 13px;
+    }
+
+    .mobile-logout {
+        display: block;
     }
 }

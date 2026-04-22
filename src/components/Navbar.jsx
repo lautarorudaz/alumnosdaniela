@@ -18,23 +18,23 @@ export default function Navbar() {
     return (
         <nav className="navbar">
             <div className="navbar-inner">
-                
-                {/* Placeholder para centrar el logo en mobile */}
-                <div className="navbar-placeholder" style={{ display: 'none' }}></div>
 
                 <div className="navbar-logo-container">
-                    <img src="/logo.png" alt="Logo" className="navbar-logo" />
+                    <img src="/logo_blanco.png" alt="Logo" className="navbar-logo" />
+                    <span className="navbar-brand">
+                        <span style={{ fontWeight: 800, letterSpacing: "0.04em" }}>RAÍZ &amp;</span>
+                        <span style={{ fontWeight: 300, letterSpacing: "0.12em", marginLeft: 6 }}>MOVIMIENTO</span>
+                    </span>
                 </div>
 
-                <div className={`navbar-links ${isOpen ? 'open' : ''}`}>
+                <div className={`navbar-links ${isOpen ? "open" : ""}`}>
                     <NavLink to="/inicio" className="navbar-link" onClick={() => setIsOpen(false)}>INICIO</NavLink>
                     <NavLink to="/ejercicios" className="navbar-link" onClick={() => setIsOpen(false)}>EJERCICIOS</NavLink>
                     <NavLink to="/rutinas" className="navbar-link" onClick={() => setIsOpen(false)}>RUTINAS</NavLink>
                     <NavLink to="/comentarios" className="navbar-link" onClick={() => setIsOpen(false)}>COMENTARIOS</NavLink>
-                    
-                    {/* Logout visible solo en mobile dentro del menú */}
-                    <div className="mobile-only" style={{ marginTop: '2rem', width: '100%', display: 'none' }}>
-                        <button onClick={handleLogout} className="navbar-logout-btn" style={{ width: '100%' }}>
+
+                    <div className="mobile-logout">
+                        <button onClick={handleLogout} className="navbar-logout-btn" style={{ width: "100%" }}>
                             Cerrar sesión
                         </button>
                     </div>
@@ -46,7 +46,6 @@ export default function Navbar() {
                     </button>
                 </div>
 
-                {/* Hamburger Button */}
                 <button className="navbar-hamburger" onClick={toggleMenu} aria-label="Menu">
                     {isOpen ? <CloseIcon /> : <MenuIcon />}
                 </button>

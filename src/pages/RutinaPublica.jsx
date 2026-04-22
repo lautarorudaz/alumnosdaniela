@@ -1,28 +1,24 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { collection, getDocs, addDoc, serverTimestamp, query, where } from "firebase/firestore";
+import { collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase/firestore";
 
 function getYoutubeEmbedUrl(url) {
     if (!url) return null;
     try {
         const urlStr = url.trim();
-        // Shorts
         if (urlStr.includes("youtube.com/shorts/")) {
             const id = urlStr.split("/shorts/")[1].split(/[?&]/)[0];
             return `https://www.youtube.com/embed/${id}`;
         }
-        // Watch
         if (urlStr.includes("youtube.com/watch?v=")) {
             const id = urlStr.split("v=")[1].split(/[?&]/)[0];
             return `https://www.youtube.com/embed/${id}`;
         }
-        // Embed
         if (urlStr.includes("youtube.com/embed/")) {
             const id = urlStr.split("/embed/")[1].split(/[?&]/)[0];
             return `https://www.youtube.com/embed/${id}`;
         }
-        // youtu.be
         if (urlStr.includes("youtu.be/")) {
             const id = urlStr.split("youtu.be/")[1].split(/[?&]/)[0];
             return `https://www.youtube.com/embed/${id}`;
@@ -44,52 +40,41 @@ export default function RutinaPublica() {
     const [alumno, setAlumno] = useState(null);
     const [cargando, setCargando] = useState(true);
     const [noEncontrado, setNoEncontrado] = useState(false);
-
     const [semanaActiva, setSemanaActiva] = useState(0);
     const [diaActivo, setDiaActivo] = useState(0);
-
-    // Comentario
     const [comentario, setComentario] = useState("");
-    const [enviandoComentario, setEnviandoComentario] = useState(false);
-    const [comentarioEnviado, setComentarioEnviado] = useState(false);
+    const [enviando, setEnviando] = useState(false);
+    const [enviado, setEnviado] = useState(false);
 
     useEffect(() => {
         const buscarAlumno = async () => {
             try {
-                // Traer alumnos y también el banco de ejercicios para enriquecer datos faltantes
                 const [snap, ejSnap] = await Promise.all([
                     getDocs(collection(db, "alumnos")),
-                    getDocs(collection(db, "ejercicios"))
+                    getDocs(collection(db, "ejercicios")),
                 ]);
-                
                 const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                const bancoEjercicios = ejSnap.docs.map(d => d.data());
-
+                const banco = ejSnap.docs.map(d => d.data());
                 const found = docs.find(d => d.tokenRutina === token || d.id === token);
-                
                 if (found && found.rutina) {
-                    // Si el ejercicio en la rutina no tiene link (por un error previo al guardar), 
-                    // intentamos buscar el link en el banco de ejercicios original por nombre.
-                    found.rutina.semanas?.forEach(s => {
-                        s.dias?.forEach(d => {
-                            d.etapas?.forEach(et => {
+                    found.rutina.semanas?.forEach(s =>
+                        s.dias?.forEach(d =>
+                            d.etapas?.forEach(et =>
                                 et.ejercicios?.forEach(ej => {
                                     if (!ej.youtubeUrl) {
-                                        const original = bancoEjercicios.find(be => be.nombre === ej.nombre);
-                                        if (original?.youtubeUrl) {
-                                            ej.youtubeUrl = original.youtubeUrl;
-                                        }
+                                        const orig = banco.find(be => be.nombre === ej.nombre);
+                                        if (orig?.youtubeUrl) ej.youtubeUrl = orig.youtubeUrl;
                                     }
-                                });
-                            });
-                        });
-                    });
+                                })
+                            )
+                        )
+                    );
                     setAlumno(found);
                 } else {
                     setNoEncontrado(true);
                 }
             } catch (err) {
-                console.error("Error al cargar rutina:", err);
+                console.error(err);
                 setNoEncontrado(true);
             } finally {
                 setCargando(false);
@@ -100,7 +85,7 @@ export default function RutinaPublica() {
 
     const handleEnviarComentario = async () => {
         if (!comentario.trim()) return;
-        setEnviandoComentario(true);
+        setEnviando(true);
         try {
             const semana = alumno.rutina.semanas[semanaActiva];
             const dia = semana?.dias[diaActivo];
@@ -114,12 +99,12 @@ export default function RutinaPublica() {
                 fecha: serverTimestamp(),
             });
             setComentario("");
-            setComentarioEnviado(true);
-            setTimeout(() => setComentarioEnviado(false), 3000);
+            setEnviado(true);
+            setTimeout(() => setEnviado(false), 3000);
         } catch (e) {
             console.error(e);
         } finally {
-            setEnviandoComentario(false);
+            setEnviando(false);
         }
     };
 
@@ -156,9 +141,11 @@ export default function RutinaPublica() {
             {/* HEADER */}
             <div style={S.header}>
                 <div style={S.headerInner}>
-                    <img src="/logo.png" alt="Logo" style={S.logo} />
+                    <img src="/logo_blanco.png" alt="Logo" style={S.logo} />
                     <div>
-                        <p style={S.headerTitle}>Daniela en Movimiento</p>
+                        <p style={S.headerTitle}>
+                            <span style={{ fontWeight: 800 }}>RAÍZ &amp;</span>
+                            <span style={{ fontWeight: 300, letterSpacing: "0.1em", marginLeft: 5 }}>MOVIMIENTO</span></p>
                         <p style={S.headerSub}>Rutina de {alumno.nombre} {alumno.apellido}</p>
                     </div>
                 </div>
@@ -166,13 +153,11 @@ export default function RutinaPublica() {
 
             <div style={S.body}>
 
-                {/* NOMBRE RUTINA */}
                 <div style={S.rutinaHeader}>
                     <h1 style={S.rutinaNombre}>{rutina.nombre}</h1>
                     <p style={S.rutinaMeta}>{semanas.length} semana{semanas.length !== 1 ? "s" : ""}</p>
                 </div>
 
-                {/* SELECTOR SEMANAS */}
                 <div style={S.selectorWrap}>
                     <p style={S.selectorLabel}>Semana</p>
                     <div style={S.pills}>
@@ -188,7 +173,6 @@ export default function RutinaPublica() {
                     </div>
                 </div>
 
-                {/* SELECTOR DÍAS */}
                 {dias.length > 1 && (
                     <div style={S.selectorWrap}>
                         <p style={S.selectorLabel}>Día</p>
@@ -206,38 +190,34 @@ export default function RutinaPublica() {
                     </div>
                 )}
 
-                {/* ETAPAS Y EJERCICIOS */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     {diaActual?.etapas?.map((etapa, idx) => (
-                        <EtapaAccordion 
-                            key={etapa.nombre + idx} 
-                            etapa={etapa} 
+                        <EtapaAccordion
+                            key={etapa.nombre + idx}
+                            etapa={etapa}
                             colores={ETAPA_COLORES[etapa.nombre] || ETAPA_COLORES["Movilidad"]}
-                            defaultOpen={idx === 0} 
+                            defaultOpen={idx === 0}
                         />
                     ))}
                 </div>
 
-                {/* COMENTARIO */}
                 <div style={S.comentarioBox}>
                     <div style={S.comentarioHeader}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#009d71" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                         </svg>
-                        <p style={S.comentarioTitle}>
-                            ¿Cómo te fue hoy?
-                        </p>
+                        <p style={S.comentarioTitle}>¿Cómo te fue hoy?</p>
                     </div>
                     <p style={S.comentarioSub}>
-                        Dejale un comentario a Daniela sobre {semanaActual?.nombre} — {diaActual?.nombre}
+                        Dejale un comentario sobre {semanaActual?.nombre} — {diaActual?.nombre}
                     </p>
 
-                    {comentarioEnviado ? (
+                    {enviado ? (
                         <div style={S.comentarioOk}>
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#026842" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12" />
                             </svg>
-                            ¡Comentario enviado! Daniela lo va a ver pronto.
+                            ¡Comentario enviado! Lo van a ver pronto.
                         </div>
                     ) : (
                         <>
@@ -249,11 +229,11 @@ export default function RutinaPublica() {
                                 onChange={e => setComentario(e.target.value)}
                             />
                             <button
-                                style={{ ...S.comentarioBtn, opacity: enviandoComentario ? 0.7 : 1 }}
+                                style={{ ...S.comentarioBtn, opacity: enviando ? 0.7 : 1 }}
                                 onClick={handleEnviarComentario}
-                                disabled={enviandoComentario || !comentario.trim()}
+                                disabled={enviando || !comentario.trim()}
                             >
-                                {enviandoComentario ? "Enviando..." : "Enviar comentario"}
+                                {enviando ? "Enviando..." : "Enviar comentario"}
                             </button>
                         </>
                     )}
@@ -264,25 +244,21 @@ export default function RutinaPublica() {
     );
 }
 
-// ── COMPONENTE ACORDEÓN ────────────────────────────────────────────────────────
 function EtapaAccordion({ etapa, colores, defaultOpen }) {
     const [isOpen, setIsOpen] = useState(defaultOpen);
-    const hayEjercicios = etapa.ejercicios?.length > 0;
-    if (!hayEjercicios) return null;
+    if (!etapa.ejercicios?.length) return null;
 
     return (
         <div style={{ ...S.etapaSection, borderColor: colores.border }}>
-            <button 
+            <button
                 onClick={() => setIsOpen(!isOpen)}
                 style={{ ...S.etapaHeader, background: colores.bg, border: "none", width: "100%", textAlign: "left", cursor: "pointer" }}
             >
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ 
-                        transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", 
-                        transition: "transform 0.2s ease",
-                        color: colores.color 
-                    }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                    <div style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s ease", color: colores.color }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="9 18 15 12 9 6" />
+                        </svg>
                     </div>
                     <span style={{ ...S.etapaNombre, color: colores.color }}>{etapa.nombre}</span>
                 </div>
@@ -295,7 +271,6 @@ function EtapaAccordion({ etapa, colores, defaultOpen }) {
                 <div style={S.ejGrid}>
                     {etapa.ejercicios.map(ej => (
                         <div key={ej.id} style={S.ejCard}>
-                            {/* Video */}
                             {ej.youtubeUrl && getYoutubeEmbedUrl(ej.youtubeUrl) ? (
                                 <div style={S.videoWrap}>
                                     <iframe
@@ -317,8 +292,6 @@ function EtapaAccordion({ etapa, colores, defaultOpen }) {
                                     </div>
                                 </div>
                             )}
-
-                            {/* Info */}
                             <div style={S.ejInfo}>
                                 <p style={S.ejNombre}>{ej.nombre}</p>
                                 <div style={S.ejMeta}>
@@ -344,30 +317,24 @@ const S = {
     page: { minHeight: "100vh", background: "#f4fdf8", fontFamily: "system-ui, sans-serif" },
     centrado: { minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f4fdf8" },
     spinner: { width: 36, height: 36, border: "3px solid #d0f0e4", borderTop: "3px solid #009d71", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-
-    header: { background: "#026842", padding: "14px 20px", position: "sticky", top: 0, zIndex: 10 },
-    headerInner: { maxWidth: 760, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 },
-    logo: { width: 40, height: 40, objectFit: "contain", borderRadius: "50%" },
-    headerTitle: { fontSize: 15, fontWeight: 700, color: "white", margin: 0 },
-    headerSub: { fontSize: 12, color: "#5ccda7", margin: 0 },
-
+    header: { background: "#026842", padding: "12px 20px", position: "sticky", top: 0, zIndex: 10 },
+    headerInner: { maxWidth: 760, margin: "0 auto", display: "flex", alignItems: "center", gap: 14 },
+    logo: { height: 44, width: "auto", objectFit: "contain", flexShrink: 0 },
+    headerTitle: { fontSize: 16, color: "white", margin: 0, letterSpacing: "0.04em" },
+    headerSub: { fontSize: 12, color: "#5ccda7", margin: 0, fontWeight: 500 },
     body: { maxWidth: 760, margin: "0 auto", padding: "1.5rem 1rem 4rem" },
-
     rutinaHeader: { marginBottom: "1.75rem", textAlign: "center" },
     rutinaNombre: { fontSize: 28, fontWeight: 800, color: "#026842", margin: "0 0 6px", letterSpacing: "-0.02em" },
     rutinaMeta: { fontSize: 14, color: "#009d71", fontWeight: 500, margin: 0 },
-
     selectorWrap: { marginBottom: "1.25rem" },
     selectorLabel: { fontSize: 11, fontWeight: 700, color: "#009d71", textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 10px" },
     pills: { display: "flex", gap: 10, flexWrap: "wrap" },
-    pill: { padding: "8px 18px", borderRadius: 24, border: "2px solid #5ccda7", background: "white", color: "#026842", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" },
-    pillActive: { background: "#026842", color: "white", borderColor: "#026842", boxShadow: "0 4px 12px rgba(2, 104, 66, 0.2)" },
-
-    etapaSection: { border: "1.5px solid", borderRadius: 16, marginBottom: "1rem", overflow: "hidden", background: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" },
-    etapaHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", transition: "filter 0.2s" },
+    pill: { padding: "8px 18px", borderRadius: 24, border: "2px solid #5ccda7", background: "white", color: "#026842", fontSize: 14, fontWeight: 600, cursor: "pointer" },
+    pillActive: { background: "#026842", color: "white", borderColor: "#026842" },
+    etapaSection: { border: "1.5px solid", borderRadius: 16, overflow: "hidden", background: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" },
+    etapaHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px" },
     etapaNombre: { fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" },
     etapaCount: { fontSize: 12, fontWeight: 600, opacity: 0.8 },
-
     ejGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16, padding: 16, background: "#fafdfc" },
     ejCard: { background: "white", borderRadius: 12, overflow: "hidden", border: "1px solid #e8f5ee", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" },
     videoWrap: { width: "100%", aspectRatio: "16/9", background: "black" },
@@ -378,12 +345,11 @@ const S = {
     ejMeta: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 },
     ejBadge: { display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600 },
     ejObs: { fontSize: 12, margin: "8px 0 0", lineHeight: 1.5, fontWeight: 500, opacity: 0.9 },
-
-    comentarioBox: { background: "white", borderRadius: 16, border: "2px solid #5ccda7", padding: "1.5rem", marginTop: "2rem", boxShadow: "0 4px 20px rgba(92, 205, 167, 0.1)" },
+    comentarioBox: { background: "white", borderRadius: 16, border: "2px solid #5ccda7", padding: "1.5rem", marginTop: "2rem", boxShadow: "0 4px 20px rgba(92,205,167,0.1)" },
     comentarioHeader: { display: "flex", alignItems: "center", gap: 10, marginBottom: 6 },
     comentarioTitle: { fontSize: 16, fontWeight: 700, color: "#026842", margin: 0 },
     comentarioSub: { fontSize: 13, color: "#009d71", margin: "0 0 16px", fontWeight: 500 },
-    comentarioInput: { width: "100%", padding: "12px 16px", border: "1.5px solid #5ccda7", borderRadius: 10, fontSize: 14, color: "#013d27", background: "#f6fdf9", resize: "vertical", outline: "none", boxSizing: "border-box", fontFamily: "inherit", transition: "border-color 0.2s" },
-    comentarioBtn: { marginTop: 12, padding: "12px 24px", background: "#efb810", color: "white", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: "pointer", width: "100%", transition: "transform 0.1s, filter 0.2s" },
+    comentarioInput: { width: "100%", padding: "12px 16px", border: "1.5px solid #5ccda7", borderRadius: 10, fontSize: 14, color: "#013d27", background: "#f6fdf9", resize: "vertical", outline: "none", boxSizing: "border-box", fontFamily: "inherit" },
+    comentarioBtn: { marginTop: 12, padding: "12px 24px", background: "#efb810", color: "white", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: "pointer", width: "100%" },
     comentarioOk: { display: "flex", alignItems: "center", gap: 12, background: "#eafaf4", border: "1.5px solid #5ccda7", borderRadius: 10, padding: "14px 18px", color: "#026842", fontSize: 14, fontWeight: 600 },
 };
