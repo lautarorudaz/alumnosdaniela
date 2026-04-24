@@ -13,6 +13,12 @@ const GRUPOS = [
     "Pantorrillas", "Abdomen", "Otros"
 ];
 
+const ETAPA_ESTILOS = {
+    "Movilidad": { color: "#026842", bg: "#eafaf4", border: "#5ccda7" },
+    "Activación": { color: "#a07000", bg: "#fff8e1", border: "#efb810" },
+    "Trabajo Central": { color: "#3730a3", bg: "#eef2ff", border: "#a5b4fc" },
+};
+
 const emptyForm = {
     nombre: "",
     etapas: [],
@@ -23,15 +29,22 @@ const emptyForm = {
 function getYoutubeEmbedUrl(url) {
     if (!url) return null;
     try {
-        // Formatos: youtu.be/ID  o  youtube.com/watch?v=ID  o  youtube.com/embed/ID
-        const regexps = [
-            /youtu\.be\/([^?&]+)/,
-            /youtube\.com\/watch\?v=([^&]+)/,
-            /youtube\.com\/embed\/([^?&]+)/,
-        ];
-        for (const re of regexps) {
-            const match = url.match(re);
-            if (match) return `https://www.youtube.com/embed/${match[1]}`;
+        const urlStr = url.trim();
+        if (urlStr.includes("youtube.com/shorts/")) {
+            const id = urlStr.split("/shorts/")[1].split(/[?&]/)[0];
+            return `https://www.youtube.com/embed/${id}`;
+        }
+        if (urlStr.includes("youtube.com/watch?v=")) {
+            const id = urlStr.split("v=")[1].split(/[?&]/)[0];
+            return `https://www.youtube.com/embed/${id}`;
+        }
+        if (urlStr.includes("youtube.com/embed/")) {
+            const id = urlStr.split("/embed/")[1].split(/[?&]/)[0];
+            return `https://www.youtube.com/embed/${id}`;
+        }
+        if (urlStr.includes("youtu.be/")) {
+            const id = urlStr.split("youtu.be/")[1].split(/[?&]/)[0];
+            return `https://www.youtube.com/embed/${id}`;
         }
     } catch { }
     return null;
@@ -47,6 +60,12 @@ export default function Ejercicios() {
     const [editando, setEditando] = useState(null);
     const [form, setForm] = useState(emptyForm);
     const [confirmDel, setConfirmDel] = useState(null);
+    // Secciones abiertas/cerradas — todas abiertas por defecto
+    const [seccionesAbiertas, setSeccionesAbiertas] = useState({
+        "Movilidad": true,
+        "Activación": true,
+        "Trabajo Central": true,
+    });
 
     const fetchEjercicios = async () => {
         const snap = await getDocs(collection(db, "ejercicios"));
@@ -55,12 +74,24 @@ export default function Ejercicios() {
 
     useEffect(() => { fetchEjercicios(); }, []);
 
+    const toggleSeccion = (etapa) =>
+        setSeccionesAbiertas(prev => ({ ...prev, [etapa]: !prev[etapa] }));
+
     const ejerciciosFiltrados = ejercicios.filter(e => {
-        const matchNombre = e.nombre.toLowerCase().includes(busqueda.toLowerCase());
+        const matchNombre = e.nombre?.toLowerCase().includes(busqueda.toLowerCase());
         const matchEtapa = filtroEtapa ? e.etapas?.includes(filtroEtapa) : true;
         const matchGrupo = filtroGrupo ? e.grupos?.includes(filtroGrupo) : true;
         return matchNombre && matchEtapa && matchGrupo;
     });
+
+    // Agrupar por etapa — un ejercicio puede aparecer en varias
+    const porEtapa = ETAPAS.reduce((acc, etapa) => {
+        acc[etapa] = ejerciciosFiltrados.filter(e => e.etapas?.includes(etapa));
+        return acc;
+    }, {});
+
+    // Ejercicios sin etapa asignada
+    const sinEtapa = ejerciciosFiltrados.filter(e => !e.etapas || e.etapas.length === 0);
 
     const toggleCheck = (key, value) => {
         setForm(prev => ({
@@ -100,48 +131,48 @@ export default function Ejercicios() {
     return (
         <>
             <Navbar />
-            <div style={styles.page}>
+            <div style={S.page}>
 
                 {/* HEADER */}
-                <div style={styles.header}>
-                    <h1 style={styles.titulo}>Ejercicios</h1>
-                    <button style={styles.btnNuevo} onClick={openNuevo}>+ Nuevo ejercicio</button>
+                <div style={S.header}>
+                    <h1 style={S.titulo}>Ejercicios</h1>
+                    <button style={S.btnNuevo} onClick={openNuevo}>+ Nuevo ejercicio</button>
                 </div>
 
                 {/* BARRA BÚSQUEDA + FILTROS */}
-                <div style={styles.toolbar}>
-                    <div style={styles.searchRow}>
+                <div style={S.toolbar}>
+                    <div style={S.searchRow}>
                         <input
-                            style={styles.search}
+                            style={S.search}
                             type="text"
                             placeholder="🔍  Buscar por nombre..."
                             value={busqueda}
                             onChange={e => setBusqueda(e.target.value)}
                         />
                         <button
-                            style={{ ...styles.btnFiltros, ...(hayFiltros ? styles.btnFiltrosActive : {}) }}
+                            style={{ ...S.btnFiltros, ...(hayFiltros ? S.btnFiltrosActive : {}) }}
                             onClick={() => setShowFiltros(v => !v)}
                         >
                             <FilterIcon />
                             Filtros
-                            {hayFiltros && <span style={styles.filtrosBadge}>!</span>}
+                            {hayFiltros && <span style={S.filtrosBadge}>!</span>}
                         </button>
                         {hayFiltros && (
-                            <button style={styles.btnLimpiar} onClick={() => { setFiltroEtapa(""); setFiltroGrupo(""); }}>
+                            <button style={S.btnLimpiar} onClick={() => { setFiltroEtapa(""); setFiltroGrupo(""); }}>
                                 Limpiar
                             </button>
                         )}
                     </div>
 
                     {showFiltros && (
-                        <div style={styles.filtrosPanel}>
-                            <div style={styles.filtroGrupo}>
-                                <p style={styles.filtroLabel}>Etapa</p>
-                                <div style={styles.chips}>
+                        <div style={S.filtrosPanel}>
+                            <div style={S.filtroGrupo}>
+                                <p style={S.filtroLabel}>Etapa</p>
+                                <div style={S.chips}>
                                     {ETAPAS.map(e => (
                                         <button
                                             key={e}
-                                            style={{ ...styles.chip, ...(filtroEtapa === e ? styles.chipActive : {}) }}
+                                            style={{ ...S.chip, ...(filtroEtapa === e ? S.chipActive : {}) }}
                                             onClick={() => setFiltroEtapa(filtroEtapa === e ? "" : e)}
                                         >
                                             {e}
@@ -149,13 +180,13 @@ export default function Ejercicios() {
                                     ))}
                                 </div>
                             </div>
-                            <div style={styles.filtroGrupo}>
-                                <p style={styles.filtroLabel}>Grupo muscular</p>
-                                <div style={styles.chips}>
+                            <div style={S.filtroGrupo}>
+                                <p style={S.filtroLabel}>Grupo muscular</p>
+                                <div style={S.chips}>
                                     {GRUPOS.map(g => (
                                         <button
                                             key={g}
-                                            style={{ ...styles.chip, ...(filtroGrupo === g ? styles.chipActive : {}) }}
+                                            style={{ ...S.chip, ...(filtroGrupo === g ? S.chipActive : {}) }}
                                             onClick={() => setFiltroGrupo(filtroGrupo === g ? "" : g)}
                                         >
                                             {g}
@@ -167,45 +198,127 @@ export default function Ejercicios() {
                     )}
                 </div>
 
-                {/* GRID DE EJERCICIOS */}
+                {/* SECCIONES POR ETAPA */}
                 {ejerciciosFiltrados.length === 0 ? (
-                    <div style={styles.empty}>No se encontraron ejercicios.</div>
+                    <div style={S.empty}>No se encontraron ejercicios.</div>
                 ) : (
-                    <div style={styles.grid}>
-                        {ejerciciosFiltrados.map(e => (
-                            <EjercicioCard
-                                key={e.id}
-                                ejercicio={e}
-                                onEditar={() => openEditar(e)}
-                                onEliminar={() => setConfirmDel(e)}
-                            />
-                        ))}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                        {ETAPAS.map(etapa => {
+                            const lista = porEtapa[etapa];
+                            const abierta = seccionesAbiertas[etapa];
+                            const estilos = ETAPA_ESTILOS[etapa];
+                            return (
+                                <div key={etapa} style={{ ...S.seccion, borderColor: estilos.border }}>
+                                    {/* Header de sección */}
+                                    <button
+                                        style={{ ...S.seccionHeader, background: estilos.bg }}
+                                        onClick={() => toggleSeccion(etapa)}
+                                    >
+                                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                            <span style={{
+                                                display: "inline-block",
+                                                transition: "transform 0.2s",
+                                                transform: abierta ? "rotate(90deg)" : "rotate(0deg)",
+                                                color: estilos.color,
+                                            }}>
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                    <polyline points="9 18 15 12 9 6" />
+                                                </svg>
+                                            </span>
+                                            <span style={{ ...S.seccionTitulo, color: estilos.color }}>{etapa}</span>
+                                            <span style={{ ...S.seccionCount, color: estilos.color }}>
+                                                {lista.length} ejercicio{lista.length !== 1 ? "s" : ""}
+                                            </span>
+                                        </div>
+                                    </button>
+
+                                    {/* Grid de ejercicios */}
+                                    {abierta && (
+                                        lista.length === 0 ? (
+                                            <div style={S.seccionEmpty}>
+                                                No hay ejercicios de {etapa} todavía.
+                                            </div>
+                                        ) : (
+                                            <div style={S.grid}>
+                                                {lista.map(e => (
+                                                    <EjercicioCard
+                                                        key={e.id}
+                                                        ejercicio={e}
+                                                        onEditar={() => openEditar(e)}
+                                                        onEliminar={() => setConfirmDel(e)}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )
+                                    )}
+                                </div>
+                            );
+                        })}
+
+                        {/* Sección "Sin etapa" si hay ejercicios sin clasificar */}
+                        {sinEtapa.length > 0 && (
+                            <div style={{ ...S.seccion, borderColor: "#e0e0e0" }}>
+                                <button
+                                    style={{ ...S.seccionHeader, background: "#f5f5f5" }}
+                                    onClick={() => toggleSeccion("sin_etapa")}
+                                >
+                                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                        <span style={{
+                                            display: "inline-block",
+                                            transition: "transform 0.2s",
+                                            transform: seccionesAbiertas["sin_etapa"] ? "rotate(90deg)" : "rotate(0deg)",
+                                            color: "#888",
+                                        }}>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="9 18 15 12 9 6" />
+                                            </svg>
+                                        </span>
+                                        <span style={{ ...S.seccionTitulo, color: "#888" }}>Sin etapa asignada</span>
+                                        <span style={{ ...S.seccionCount, color: "#888" }}>
+                                            {sinEtapa.length} ejercicio{sinEtapa.length !== 1 ? "s" : ""}
+                                        </span>
+                                    </div>
+                                </button>
+                                {seccionesAbiertas["sin_etapa"] && (
+                                    <div style={S.grid}>
+                                        {sinEtapa.map(e => (
+                                            <EjercicioCard
+                                                key={e.id}
+                                                ejercicio={e}
+                                                onEditar={() => openEditar(e)}
+                                                onEliminar={() => setConfirmDel(e)}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
 
             {/* MODAL NUEVO / EDITAR */}
             {showModal && (
-                <div style={styles.overlay}>
-                    <div style={styles.modal}>
-                        <h2 style={styles.modalTitle}>{editando ? "Editar ejercicio" : "Nuevo ejercicio"}</h2>
+                <div style={S.overlay}>
+                    <div style={S.modal}>
+                        <h2 style={S.modalTitle}>{editando ? "Editar ejercicio" : "Nuevo ejercicio"}</h2>
 
-                        <div style={styles.formField}>
-                            <label style={styles.formLabel}>Nombre del ejercicio *</label>
+                        <div style={S.formField}>
+                            <label style={S.formLabel}>Nombre del ejercicio *</label>
                             <input
                                 type="text"
                                 value={form.nombre}
                                 onChange={e => setForm({ ...form, nombre: e.target.value })}
-                                style={styles.formInput}
+                                style={S.formInput}
                                 placeholder="Ej: Sentadilla con peso"
                             />
                         </div>
 
-                        <div style={styles.formField}>
-                            <label style={styles.formLabel}>Etapa</label>
-                            <div style={styles.checkGrid}>
+                        <div style={S.formField}>
+                            <label style={S.formLabel}>Etapa</label>
+                            <div style={S.checkGrid}>
                                 {ETAPAS.map(e => (
-                                    <label key={e} style={styles.checkItem}>
+                                    <label key={e} style={S.checkItem}>
                                         <input
                                             type="checkbox"
                                             checked={form.etapas.includes(e)}
@@ -218,11 +331,11 @@ export default function Ejercicios() {
                             </div>
                         </div>
 
-                        <div style={styles.formField}>
-                            <label style={styles.formLabel}>Grupo muscular</label>
-                            <div style={styles.checkGrid}>
+                        <div style={S.formField}>
+                            <label style={S.formLabel}>Grupo muscular</label>
+                            <div style={S.checkGrid}>
                                 {GRUPOS.map(g => (
-                                    <label key={g} style={styles.checkItem}>
+                                    <label key={g} style={S.checkItem}>
                                         <input
                                             type="checkbox"
                                             checked={form.grupos.includes(g)}
@@ -235,20 +348,20 @@ export default function Ejercicios() {
                             </div>
                         </div>
 
-                        <div style={styles.formField}>
-                            <label style={styles.formLabel}>Link de YouTube</label>
+                        <div style={S.formField}>
+                            <label style={S.formLabel}>Link de YouTube</label>
                             <input
                                 type="url"
                                 value={form.youtubeUrl}
                                 onChange={e => setForm({ ...form, youtubeUrl: e.target.value })}
-                                style={styles.formInput}
+                                style={S.formInput}
                                 placeholder="https://www.youtube.com/watch?v=..."
                             />
                         </div>
 
-                        <div style={styles.modalActions}>
-                            <button style={styles.btnCancelar} onClick={() => setShowModal(false)}>Cancelar</button>
-                            <button style={styles.btnGuardar} onClick={handleGuardar}>Guardar</button>
+                        <div style={S.modalActions}>
+                            <button style={S.btnCancelar} onClick={() => setShowModal(false)}>Cancelar</button>
+                            <button style={S.btnGuardar} onClick={handleGuardar}>Guardar</button>
                         </div>
                     </div>
                 </div>
@@ -256,16 +369,16 @@ export default function Ejercicios() {
 
             {/* MODAL CONFIRMAR ELIMINAR */}
             {confirmDel && (
-                <div style={styles.overlay}>
-                    <div style={{ ...styles.modal, maxWidth: "360px", textAlign: "center" }}>
+                <div style={S.overlay}>
+                    <div style={{ ...S.modal, maxWidth: "360px", textAlign: "center" }}>
                         <DeleteIcon size={32} color="#c0392b" />
-                        <h2 style={{ ...styles.modalTitle, marginTop: "12px" }}>¿Eliminar ejercicio?</h2>
+                        <h2 style={{ ...S.modalTitle, marginTop: "12px" }}>¿Eliminar ejercicio?</h2>
                         <p style={{ color: "var(--color-text-muted)", fontSize: "14px", margin: "8px 0 24px" }}>
                             Vas a eliminar <strong>{confirmDel.nombre}</strong>. Esta acción no se puede deshacer.
                         </p>
-                        <div style={styles.modalActions}>
-                            <button style={styles.btnCancelar} onClick={() => setConfirmDel(null)}>Cancelar</button>
-                            <button style={{ ...styles.btnGuardar, background: "#c0392b" }} onClick={() => handleEliminar(confirmDel.id)}>Eliminar</button>
+                        <div style={S.modalActions}>
+                            <button style={S.btnCancelar} onClick={() => setConfirmDel(null)}>Cancelar</button>
+                            <button style={{ ...S.btnGuardar, background: "#c0392b" }} onClick={() => handleEliminar(confirmDel.id)}>Eliminar</button>
                         </div>
                     </div>
                 </div>
@@ -280,31 +393,27 @@ function EjercicioCard({ ejercicio, onEditar, onEliminar }) {
     const embedUrl = getYoutubeEmbedUrl(ejercicio.youtubeUrl);
 
     return (
-        <div style={styles.card}>
-            {/* VIDEO O PLACEHOLDER */}
-            <div style={styles.videoWrap}>
+        <div style={S.card}>
+            <div style={S.videoWrap}>
                 {embedUrl ? (
                     showVideo ? (
                         <iframe
                             src={embedUrl}
                             title={ejercicio.nombre}
-                            style={styles.iframe}
+                            style={S.iframe}
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             allowFullScreen
                         />
                     ) : (
-                        <div style={styles.videoPlaceholder}>
+                        <div style={S.videoPlaceholder}>
                             <YoutubeIcon />
-                            <button
-                                onClick={() => setShowVideo(true)}
-                                style={styles.btnPreview}
-                            >
+                            <button onClick={() => setShowVideo(true)} style={S.btnPreview}>
                                 Ver Preview
                             </button>
                         </div>
                     )
                 ) : (
-                    <div style={styles.videoPlaceholder}>
+                    <div style={S.videoPlaceholder}>
                         <YoutubeIcon />
                         <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "8px" }}>
                             Sin video
@@ -313,31 +422,20 @@ function EjercicioCard({ ejercicio, onEditar, onEliminar }) {
                 )}
             </div>
 
-            {/* INFO */}
-            <div style={styles.cardBody}>
-                <p style={styles.cardNombre}>{ejercicio.nombre}</p>
-
-                {ejercicio.etapas?.length > 0 && (
-                    <div style={styles.tagsRow}>
-                        {ejercicio.etapas.map(e => (
-                            <span key={e} style={{ ...styles.tag, ...styles.tagEtapa }}>{e}</span>
-                        ))}
-                    </div>
-                )}
-
+            <div style={S.cardBody}>
+                <p style={S.cardNombre}>{ejercicio.nombre}</p>
                 {ejercicio.grupos?.length > 0 && (
-                    <div style={styles.tagsRow}>
+                    <div style={S.tagsRow}>
                         {ejercicio.grupos.map(g => (
-                            <span key={g} style={{ ...styles.tag, ...styles.tagGrupo }}>{g}</span>
+                            <span key={g} style={{ ...S.tag, ...S.tagGrupo }}>{g}</span>
                         ))}
                     </div>
                 )}
             </div>
 
-            {/* ACCIONES */}
-            <div style={styles.cardActions}>
-                <button style={styles.iconBtn} title="Editar" onClick={onEditar}><EditIcon /></button>
-                <button style={{ ...styles.iconBtn, color: "#c0392b" }} title="Eliminar" onClick={onEliminar}><DeleteIcon /></button>
+            <div style={S.cardActions}>
+                <button style={S.iconBtn} title="Editar" onClick={onEditar}><EditIcon /></button>
+                <button style={{ ...S.iconBtn, color: "#c0392b" }} title="Eliminar" onClick={onEliminar}><DeleteIcon /></button>
             </div>
         </div>
     );
@@ -345,41 +443,20 @@ function EjercicioCard({ ejercicio, onEditar, onEliminar }) {
 
 // ── ÍCONOS ───────────────────────────────────────────────────────────────────
 function FilterIcon() {
-    return (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-        </svg>
-    );
+    return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>;
 }
 function YoutubeIcon() {
-    return (
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" />
-            <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#ccc" stroke="none" />
-        </svg>
-    );
+    return <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" /><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#ccc" stroke="none" /></svg>;
 }
 function EditIcon() {
-    return (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-        </svg>
-    );
+    return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>;
 }
 function DeleteIcon({ size = 16, color = "currentColor" }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6" />
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-            <path d="M10 11v6M14 11v6" />
-            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-        </svg>
-    );
+    return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>;
 }
 
 // ── ESTILOS ──────────────────────────────────────────────────────────────────
-const styles = {
+const S = {
     page: { maxWidth: "1200px", margin: "0 auto", padding: "2rem 1.5rem" },
     header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" },
     titulo: { fontSize: "22px", fontWeight: "600", color: "var(--color-primary)", margin: 0 },
@@ -392,7 +469,6 @@ const styles = {
     btnFiltrosActive: { background: "var(--color-primary)", color: "white", borderColor: "var(--color-primary)" },
     filtrosBadge: { background: "var(--color-accent)", color: "white", borderRadius: "50%", width: "16px", height: "16px", fontSize: "10px", display: "flex", alignItems: "center", justifyContent: "center" },
     btnLimpiar: { padding: "9px 14px", border: "1.5px solid #e0e0e0", borderRadius: "var(--radius-sm)", background: "white", color: "#999", fontSize: "13px", cursor: "pointer" },
-
     filtrosPanel: { marginTop: "12px", background: "white", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "1rem" },
     filtroGrupo: { display: "flex", flexDirection: "column", gap: "8px" },
     filtroLabel: { fontSize: "12px", fontWeight: "600", color: "var(--color-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" },
@@ -400,23 +476,28 @@ const styles = {
     chip: { padding: "5px 14px", borderRadius: "20px", border: "1.5px solid var(--color-border)", background: "white", color: "var(--color-primary)", fontSize: "13px", cursor: "pointer", fontWeight: "500" },
     chipActive: { background: "var(--color-primary)", color: "white", borderColor: "var(--color-primary)" },
 
+    // Secciones por etapa
+    seccion: { border: "1.5px solid", borderRadius: "var(--radius-md)", overflow: "hidden", background: "white", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" },
+    seccionHeader: { width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", border: "none", cursor: "pointer", textAlign: "left" },
+    seccionTitulo: { fontSize: "14px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.08em" },
+    seccionCount: { fontSize: "12px", fontWeight: "500", opacity: 0.75, marginLeft: 4 },
+    seccionEmpty: { padding: "2rem", textAlign: "center", color: "var(--color-text-muted)", fontSize: "13px", background: "#fafafa" },
+
     empty: { textAlign: "center", color: "var(--color-text-muted)", fontSize: "14px", padding: "4rem 0" },
+    grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1rem", padding: "16px", background: "#fafdfc" },
 
-    grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" },
-
-    card: { background: "white", borderRadius: "var(--radius-md)", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.07)", display: "flex", flexDirection: "column" },
+    card: { background: "white", borderRadius: "var(--radius-sm)", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.07)", display: "flex", flexDirection: "column", border: "1px solid #e8f5ee" },
     videoWrap: { width: "100%", aspectRatio: "16/9", background: "#f6fdf9", position: "relative" },
     iframe: { width: "100%", height: "100%", border: "none", display: "block" },
     videoPlaceholder: { width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" },
 
-    cardBody: { padding: "12px 14px", flex: 1, display: "flex", flexDirection: "column", gap: "8px" },
-    cardNombre: { fontSize: "15px", fontWeight: "600", color: "var(--color-primary)", margin: 0 },
-    tagsRow: { display: "flex", flexWrap: "wrap", gap: "6px" },
-    tag: { display: "inline-block", padding: "2px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "500" },
-    tagEtapa: { background: "#eafaf4", color: "var(--color-primary)" },
+    cardBody: { padding: "12px 14px", flex: 1, display: "flex", flexDirection: "column", gap: "6px" },
+    cardNombre: { fontSize: "14px", fontWeight: "600", color: "var(--color-primary)", margin: 0 },
+    tagsRow: { display: "flex", flexWrap: "wrap", gap: "5px" },
+    tag: { display: "inline-block", padding: "2px 9px", borderRadius: "20px", fontSize: "11px", fontWeight: "500" },
     tagGrupo: { background: "#fff8e1", color: "#a07000" },
 
-    cardActions: { padding: "10px 14px", borderTop: "1px solid #f0faf5", display: "flex", gap: "8px", justifyContent: "flex-end" },
+    cardActions: { padding: "8px 12px", borderTop: "1px solid #f0faf5", display: "flex", gap: "8px", justifyContent: "flex-end" },
     iconBtn: { background: "none", border: "none", cursor: "pointer", color: "var(--color-primary)", padding: "4px", borderRadius: "4px", display: "flex", alignItems: "center" },
 
     overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 },
@@ -430,5 +511,5 @@ const styles = {
     modalActions: { display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "1.5rem" },
     btnCancelar: { padding: "10px 20px", background: "white", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", fontSize: "14px", cursor: "pointer", color: "var(--color-text)" },
     btnGuardar: { padding: "10px 20px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-sm)", fontSize: "14px", fontWeight: "500", cursor: "pointer" },
-    btnPreview: { marginTop: "12px", padding: "6px 16px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-sm)", fontSize: "12px", cursor: "pointer", fontWeight: "600", letterSpacing: "0.03em" },
+    btnPreview: { marginTop: "12px", padding: "6px 16px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-sm)", fontSize: "12px", cursor: "pointer", fontWeight: "600" },
 };
