@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Navbar from "../components/Navbar";
 import {
-    collection, getDocs, addDoc, updateDoc, deleteDoc, doc
+    collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc
 } from "firebase/firestore";
 import { db } from "../firebase/firestore";
 
 const ETAPAS = ["Movilidad", "Activación", "Trabajo Central"];
 
-const GRUPOS = [
+const GRUPOS_DEFAULT = [
     "Pecho", "Hombro", "Espalda", "Tríceps", "Bíceps",
     "Antebrazo", "Cadera", "Cuádriceps", "Isquiotibiales",
     "Pantorrillas", "Abdomen", "Otros"
@@ -52,6 +52,7 @@ function getYoutubeEmbedUrl(url) {
 
 export default function Ejercicios() {
     const [ejercicios, setEjercicios] = useState([]);
+    const [grupos, setGrupos] = useState(GRUPOS_DEFAULT);
     const [busqueda, setBusqueda] = useState("");
     const [showFiltros, setShowFiltros] = useState(false);
     const [filtroEtapa, setFiltroEtapa] = useState("");
@@ -60,19 +61,44 @@ export default function Ejercicios() {
     const [editando, setEditando] = useState(null);
     const [form, setForm] = useState(emptyForm);
     const [confirmDel, setConfirmDel] = useState(null);
-    // Secciones abiertas/cerradas — todas abiertas por defecto
+    const [showZonasModal, setShowZonasModal] = useState(false);
     const [seccionesAbiertas, setSeccionesAbiertas] = useState({
         "Movilidad": true,
         "Activación": true,
         "Trabajo Central": true,
     });
 
+    const fetchGrupos = async () => {
+        const snap = await getDocs(collection(db, "gruposMusculares"));
+        if (snap.empty) {
+            // Primera vez: guardar los defaults en Firestore
+            for (const nombre of GRUPOS_DEFAULT) {
+                await addDoc(collection(db, "gruposMusculares"), { nombre });
+            }
+            setGrupos(GRUPOS_DEFAULT);
+        } else {
+            const lista = snap.docs.map(d => ({ id: d.id, nombre: d.data().nombre }));
+            lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
+            setGrupos(lista.map(g => g.nombre));
+        }
+    };
+
+    const fetchGruposConId = async () => {
+        const snap = await getDocs(collection(db, "gruposMusculares"));
+        const lista = snap.docs.map(d => ({ id: d.id, nombre: d.data().nombre }));
+        lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
+        return lista;
+    };
+
     const fetchEjercicios = async () => {
         const snap = await getDocs(collection(db, "ejercicios"));
         setEjercicios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
 
-    useEffect(() => { fetchEjercicios(); }, []);
+    useEffect(() => {
+        fetchEjercicios();
+        fetchGrupos();
+    }, []);
 
     const toggleSeccion = (etapa) =>
         setSeccionesAbiertas(prev => ({ ...prev, [etapa]: !prev[etapa] }));
@@ -136,7 +162,12 @@ export default function Ejercicios() {
                 {/* HEADER */}
                 <div style={S.header}>
                     <h1 style={S.titulo}>Ejercicios</h1>
-                    <button style={S.btnNuevo} onClick={openNuevo}>+ Nuevo ejercicio</button>
+                    <div style={{ display: "flex", gap: "10px" }}>
+                        <button style={S.btnZonas} onClick={() => setShowZonasModal(true)}>
+                            <MuscleIcon /> Zonas musculares
+                        </button>
+                        <button style={S.btnNuevo} onClick={openNuevo}>+ Nuevo ejercicio</button>
+                    </div>
                 </div>
 
                 {/* BARRA BÚSQUEDA + FILTROS */}
@@ -183,7 +214,7 @@ export default function Ejercicios() {
                             <div style={S.filtroGrupo}>
                                 <p style={S.filtroLabel}>Grupo muscular</p>
                                 <div style={S.chips}>
-                                    {GRUPOS.map(g => (
+                                    {grupos.map(g => (
                                         <button
                                             key={g}
                                             style={{ ...S.chip, ...(filtroGrupo === g ? S.chipActive : {}) }}
@@ -334,7 +365,7 @@ export default function Ejercicios() {
                         <div style={S.formField}>
                             <label style={S.formLabel}>Grupo muscular</label>
                             <div style={S.checkGrid}>
-                                {GRUPOS.map(g => (
+                                {grupos.map(g => (
                                     <label key={g} style={S.checkItem}>
                                         <input
                                             type="checkbox"
@@ -383,7 +414,153 @@ export default function Ejercicios() {
                     </div>
                 </div>
             )}
+
+            {/* MODAL ZONAS MUSCULARES */}
+            {showZonasModal && (
+                <ZonasMusculares
+                    onClose={() => { setShowZonasModal(false); fetchGrupos(); }}
+                    fetchGruposConId={fetchGruposConId}
+                />
+            )}
         </>
+    );
+}
+
+// ── MODAL ZONAS MUSCULARES ───────────────────────────────────────────────────
+function ZonasMusculares({ onClose, fetchGruposConId }) {
+    const [lista, setLista] = useState([]);
+    const [nuevoNombre, setNuevoNombre] = useState("");
+    const [editandoId, setEditandoId] = useState(null);
+    const [editandoNombre, setEditandoNombre] = useState("");
+    const [confirmDelZona, setConfirmDelZona] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const inputRef = useRef(null);
+
+    useEffect(() => {
+        fetchGruposConId().then(setLista);
+    }, []);
+
+    const handleAgregar = async () => {
+        const nombre = nuevoNombre.trim();
+        if (!nombre) return;
+        if (lista.some(g => g.nombre.toLowerCase() === nombre.toLowerCase())) return;
+        setSaving(true);
+        const ref = await addDoc(collection(db, "gruposMusculares"), { nombre });
+        setLista(prev => [...prev, { id: ref.id, nombre }].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+        setNuevoNombre("");
+        setSaving(false);
+        inputRef.current?.focus();
+    };
+
+    const handleRenombrar = async (id) => {
+        const nombre = editandoNombre.trim();
+        if (!nombre) return;
+        setSaving(true);
+        await updateDoc(doc(db, "gruposMusculares", id), { nombre });
+        setLista(prev => prev.map(g => g.id === id ? { ...g, nombre } : g).sort((a, b) => a.nombre.localeCompare(b.nombre)));
+        setEditandoId(null);
+        setSaving(false);
+    };
+
+    const handleEliminarZona = async (id) => {
+        setSaving(true);
+        await deleteDoc(doc(db, "gruposMusculares", id));
+        setLista(prev => prev.filter(g => g.id !== id));
+        setConfirmDelZona(null);
+        setSaving(false);
+    };
+
+    return (
+        <div style={S.overlay}>
+            <div style={{ ...S.modal, maxWidth: "480px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+                    <h2 style={{ ...S.modalTitle, margin: 0 }}>Zonas musculares</h2>
+                    <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "20px", color: "#999" }}>✕</button>
+                </div>
+
+                {/* Agregar nueva */}
+                <div style={{ display: "flex", gap: "8px", marginBottom: "1.25rem" }}>
+                    <input
+                        ref={inputRef}
+                        style={{ ...S.formInput, flex: 1, margin: 0 }}
+                        placeholder="Nueva zona muscular..."
+                        value={nuevoNombre}
+                        onChange={e => setNuevoNombre(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && handleAgregar()}
+                    />
+                    <button
+                        style={{ ...S.btnGuardar, padding: "10px 16px", opacity: saving ? 0.6 : 1 }}
+                        onClick={handleAgregar}
+                        disabled={saving}
+                    >
+                        + Agregar
+                    </button>
+                </div>
+
+                {/* Lista */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "340px", overflowY: "auto" }}>
+                    {lista.length === 0 && (
+                        <p style={{ color: "var(--color-text-muted)", textAlign: "center", fontSize: "13px", padding: "1rem" }}>No hay zonas musculares.</p>
+                    )}
+                    {lista.map(zona => (
+                        <div key={zona.id} style={S.zonaRow}>
+                            {editandoId === zona.id ? (
+                                <input
+                                    autoFocus
+                                    style={{ ...S.formInput, flex: 1, margin: 0, padding: "6px 10px" }}
+                                    value={editandoNombre}
+                                    onChange={e => setEditandoNombre(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === "Enter") handleRenombrar(zona.id);
+                                        if (e.key === "Escape") setEditandoId(null);
+                                    }}
+                                />
+                            ) : (
+                                <span style={{ flex: 1, fontSize: "14px", color: "var(--color-text)" }}>{zona.nombre}</span>
+                            )}
+                            <div style={{ display: "flex", gap: "6px" }}>
+                                {editandoId === zona.id ? (
+                                    <>
+                                        <button style={S.zonaBtn} onClick={() => handleRenombrar(zona.id)} disabled={saving}>✓</button>
+                                        <button style={{ ...S.zonaBtn, color: "#999" }} onClick={() => setEditandoId(null)}>✕</button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button style={S.zonaBtn} title="Renombrar" onClick={() => { setEditandoId(zona.id); setEditandoNombre(zona.nombre); }}>
+                                            <EditIcon />
+                                        </button>
+                                        <button style={{ ...S.zonaBtn, color: "#c0392b" }} title="Eliminar" onClick={() => setConfirmDelZona(zona)}>
+                                            <DeleteIcon />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <div style={{ ...S.modalActions, marginTop: "1.25rem" }}>
+                    <button style={S.btnCancelar} onClick={onClose}>Cerrar</button>
+                </div>
+
+                {/* Confirm eliminar zona */}
+                {confirmDelZona && (
+                    <div style={{ ...S.overlay, borderRadius: "var(--radius-lg)" }}>
+                        <div style={{ ...S.modal, maxWidth: "340px", textAlign: "center" }}>
+                            <DeleteIcon size={28} color="#c0392b" />
+                            <h3 style={{ color: "var(--color-primary)", margin: "12px 0 8px" }}>¿Eliminar zona?</h3>
+                            <p style={{ color: "var(--color-text-muted)", fontSize: "13px", margin: "0 0 20px" }}>
+                                Vas a eliminar <strong>{confirmDelZona.nombre}</strong>. Los ejercicios que la tengan asignada no serán afectados.
+                            </p>
+                            <div style={S.modalActions}>
+                                <button style={S.btnCancelar} onClick={() => setConfirmDelZona(null)}>Cancelar</button>
+                                <button style={{ ...S.btnGuardar, background: "#c0392b" }} onClick={() => handleEliminarZona(confirmDelZona.id)} disabled={saving}>Eliminar</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
     );
 }
 
@@ -445,6 +622,9 @@ function EjercicioCard({ ejercicio, onEditar, onEliminar }) {
 function FilterIcon() {
     return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>;
 }
+function MuscleIcon() {
+    return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1" /><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" /></svg>;
+}
 function YoutubeIcon() {
     return <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" /><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#ccc" stroke="none" /></svg>;
 }
@@ -461,6 +641,9 @@ const S = {
     header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" },
     titulo: { fontSize: "22px", fontWeight: "600", color: "var(--color-primary)", margin: 0 },
     btnNuevo: { padding: "9px 20px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-sm)", fontSize: "14px", fontWeight: "500", cursor: "pointer" },
+    btnZonas: { display: "flex", alignItems: "center", gap: "6px", padding: "9px 18px", background: "white", color: "var(--color-primary)", border: "1.5px solid var(--color-primary)", borderRadius: "var(--radius-sm)", fontSize: "14px", fontWeight: "500", cursor: "pointer" },
+    zonaRow: { display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "#f6fdf9", borderRadius: "var(--radius-sm)", border: "1px solid #e8f5ee" },
+    zonaBtn: { background: "none", border: "none", cursor: "pointer", color: "var(--color-primary)", padding: "4px", borderRadius: "4px", display: "flex", alignItems: "center", fontSize: "14px" },
 
     toolbar: { marginBottom: "1.75rem" },
     searchRow: { display: "flex", gap: "10px", alignItems: "center" },

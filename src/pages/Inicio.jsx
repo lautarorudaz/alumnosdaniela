@@ -3,13 +3,11 @@ import Navbar from "../components/Navbar";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../firebase/firestore";
 import RutinaEditor, { emptyRutina } from "../components/RutinaEditor";
-import { generateId } from "../utils/uuid";
-import "./Inicio.css";
 
 const METODOLOGIAS = ["Presencial", "A distancia", "Híbrido"];
 
 const emptyForm = {
-    nombre: "", apellido: "", edad: "", metodologia: "Presencial", telefono: "54",
+    nombre: "", apellido: "", edad: "", metodologia: "Presencial", telefono: "",
 };
 
 export default function Inicio() {
@@ -18,19 +16,18 @@ export default function Inicio() {
     const [busqueda, setBusqueda] = useState("");
     const [filtro, setFiltro] = useState("todos");
     const [showModal, setShowModal] = useState(false);
-    const [editando, setEditando] = useState(null);
+    const [editando, setEditando] = useState(null); // objeto alumno completo
     const [form, setForm] = useState(emptyForm);
     const [confirmDel, setConfirmDel] = useState(null);
+    const [confirmQuitarRutina, setConfirmQuitarRutina] = useState(null);
 
     const [alumnoParaRutina, setAlumnoParaRutina] = useState(null);
     const [showSelectTemplate, setShowSelectTemplate] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
     const [rutinaEditing, setRutinaEditing] = useState(null);
 
-    // Compartir
     const [alumnoCompartir, setAlumnoCompartir] = useState(null);
     const [copiadoOk, setCopiadoOk] = useState(false);
-    const [showFiltros, setShowFiltros] = useState(false);
 
     const fetchAlumnos = async () => {
         const snap = await getDocs(collection(db, "alumnos"));
@@ -40,20 +37,6 @@ export default function Inicio() {
     };
 
     useEffect(() => { fetchAlumnos(); }, []);
-    
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const alumnoId = params.get("alumnoId");
-        if (alumnoId && alumnos.length > 0) {
-            const a = alumnos.find(al => al.id === alumnoId);
-            if (a && a.rutina) {
-                setAlumnoParaRutina(a);
-                setRutinaEditing(a.rutina);
-                setShowEditor(true);
-                window.history.replaceState({}, "", window.location.pathname);
-            }
-        }
-    }, [alumnos]);
 
     const totalAlumnos = alumnos.length;
     const conRutina = alumnos.filter(a => a.rutina).length;
@@ -70,19 +53,24 @@ export default function Inicio() {
         return matchBusqueda && matchFiltro;
     });
 
-    const openNuevo = () => { setForm(emptyForm); setEditando(null); setShowModal(true); };
+    const openNuevo = () => {
+        setForm(emptyForm);
+        setEditando(null);
+        setShowModal(true);
+    };
+
     const openEditar = (a) => {
         setForm({ nombre: a.nombre, apellido: a.apellido, edad: a.edad, metodologia: a.metodologia, telefono: a.telefono });
-        setEditando(a.id);
+        setEditando(a); // guardamos el alumno completo para acceder a su rutina
         setShowModal(true);
     };
 
     const handleGuardar = async () => {
         if (!form.nombre || !form.apellido) return;
         if (editando) {
-            await updateDoc(doc(db, "alumnos", editando), form);
+            await updateDoc(doc(db, "alumnos", editando.id), form);
         } else {
-            const token = generateId().replace(/-/g, "").slice(0, 12);
+            const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
             await addDoc(collection(db, "alumnos"), { ...form, rutina: null, tokenRutina: token });
         }
         setShowModal(false);
@@ -92,6 +80,13 @@ export default function Inicio() {
     const handleEliminar = async (id) => {
         await deleteDoc(doc(db, "alumnos", id));
         setConfirmDel(null);
+        fetchAlumnos();
+    };
+
+    const handleQuitarRutina = async (alumno) => {
+        await updateDoc(doc(db, "alumnos", alumno.id), { rutina: null });
+        setConfirmQuitarRutina(null);
+        setShowModal(false);
         fetchAlumnos();
     };
 
@@ -135,209 +130,173 @@ export default function Inicio() {
     const handleWhatsApp = (alumno) => {
         const url = getUrlRutina(alumno);
         const texto = `Hola ${alumno.nombre}! 👋 Te comparto tu rutina de entrenamiento: ${url}`;
-        const waUrl = `https://wa.me/${alumno.telefono?.replace(/\D/g, "")}?text=${encodeURIComponent(texto)}`;
-        window.open(waUrl, "_blank");
+        window.open(`https://wa.me/${alumno.telefono?.replace(/\D/g, "")}?text=${encodeURIComponent(texto)}`, "_blank");
     };
+
+    // Alumno actualizado desde el state (para reflejar cambios tras fetchAlumnos)
+    const alumnoEditandoActual = editando
+        ? alumnos.find(a => a.id === editando.id)
+        : null;
 
     return (
         <>
             <Navbar />
-            <div className="inicio-page" style={styles.page}>
+            <div style={S.page}>
 
-                <div className="inicio-stats-grid">
+                <div style={S.statsGrid}>
                     <StatCard label="Total alumnos" value={totalAlumnos} color="var(--color-primary)" />
-                    <StatCard label="Con rutina" value={conRutina} color="var(--color-primary-2)" />
-                    <StatCard label="Sin rutina" value={sinRutina} color="var(--color-accent)" />
+                    <StatCard label="Alumnos con rutina" value={conRutina} color="var(--color-primary-2)" />
+                    <StatCard label="Alumnos sin rutina" value={sinRutina} color="var(--color-accent)" />
                 </div>
 
-                <div className="inicio-toolbar">
-                    <div className="toolbar-main-row">
-                        <input
-                            className="inicio-search"
-                            type="text"
-                            placeholder="🔍 Buscar por nombre..."
-                            value={busqueda}
-                            onChange={e => setBusqueda(e.target.value)}
-                        />
-                        <button 
-                            className={`btn-toggle-filtros ${filtro !== 'todos' ? 'active' : ''}`}
-                            onClick={() => setShowFiltros(!showFiltros)}
-                        >
-                            <FilterIcon />
-                            <span>Filtros</span>
-                        </button>
-                    </div>
-
-                    <div className={`inicio-filtros-panel ${showFiltros ? 'open' : ''}`}>
+                <div style={S.toolbar}>
+                    <input
+                        style={S.search}
+                        type="text"
+                        placeholder="🔍  Buscar por nombre..."
+                        value={busqueda}
+                        onChange={e => setBusqueda(e.target.value)}
+                    />
+                    <div style={S.filtros}>
                         {[
                             { key: "todos", label: "Todos" },
                             { key: "con_rutina", label: "Con rutina" },
                             { key: "sin_rutina", label: "Sin rutina" },
                             { key: "a_distancia", label: "A distancia" },
                         ].map(f => (
-                            <button
-                                key={f.key}
-                                onClick={() => { setFiltro(f.key); setShowFiltros(false); }}
-                                className={`filtro-btn ${filtro === f.key ? 'active' : ''}`}
-                            >
+                            <button key={f.key} onClick={() => setFiltro(f.key)}
+                                style={{ ...S.filtroBtn, ...(filtro === f.key ? S.filtroBtnActive : {}) }}>
                                 {f.label}
                             </button>
                         ))}
                     </div>
-                    
-                    <button className="btn-nuevo-alumno" onClick={openNuevo}>+ Nuevo alumno</button>
+                    <button style={S.btnNuevo} onClick={openNuevo}>+ Nuevo alumno</button>
                 </div>
 
-                {/* VISTA DESKTOP */}
-                <div className="table-desktop">
-                    <div style={styles.tableWrap}>
-                        <table style={styles.table}>
-                            <thead>
-                                <tr>
-                                    {["Nombre y apellido", "Edad", "Metodología", "Teléfono", "Rutina", "Acciones"].map(h => (
-                                        <th key={h} style={styles.th}>{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {alumnosFiltrados.length === 0 ? (
-                                    <tr><td colSpan={6} style={styles.empty}>No se encontraron alumnos.</td></tr>
-                                ) : alumnosFiltrados.map(a => (
-                                    <tr key={a.id} style={styles.tr}>
-                                        <td style={styles.td}><strong>{a.nombre} {a.apellido}</strong></td>
-                                        <td style={styles.td}>{a.edad}</td>
-                                        <td style={styles.td}>
-                                            <span style={{ ...styles.badge, background: a.metodologia === "A distancia" ? "#e8f4fd" : "#eafaf4", color: a.metodologia === "A distancia" ? "#1a6fa8" : "var(--color-primary)" }}>
-                                                {a.metodologia}
-                                            </span>
-                                        </td>
-                                        <td style={styles.td}>{a.telefono}</td>
-                                        <td style={styles.td}>
-                                            <span style={{ ...styles.badge, background: a.rutina ? "#eafaf4" : "#fff8e1", color: a.rutina ? "var(--color-primary)" : "#a07000" }}>
-                                                {a.rutina ? "Asignada" : "Sin rutina"}
-                                            </span>
-                                        </td>
-                                        <td style={styles.td}>
-                                            <div style={styles.acciones}>
-                                                <button title="Editar" style={styles.iconBtn} onClick={() => openEditar(a)}><EditIcon /></button>
-                                                {a.rutina ? (
-                                                    <button title="Ver Rutina" style={{ ...styles.iconBtn, color: "var(--color-primary)" }} onClick={() => {
-                                                        setAlumnoParaRutina(a);
-                                                        setRutinaEditing(a.rutina);
-                                                        setShowEditor(true);
-                                                    }}><ViewIcon /></button>
-                                                ) : (
-                                                    <button title="Asignar" style={{ ...styles.iconBtn, color: "var(--color-primary-2)" }} onClick={() => {
-                                                        setAlumnoParaRutina(a);
-                                                        setShowSelectTemplate(true);
-                                                    }}><RutinaIcon /></button>
-                                                )}
-                                                {a.rutina && (
-                                                    <button title="Compartir" style={{ ...styles.iconBtn, color: "#25a244" }} onClick={() => { setAlumnoCompartir(a); setCopiadoOk(false); }}><ShareIcon /></button>
-                                                )}
-                                                <button title="Eliminar" style={{ ...styles.iconBtn, color: "#c0392b" }} onClick={() => setConfirmDel(a)}><DeleteIcon /></button>
-                                            </div>
-                                        </td>
-                                    </tr>
+                <div style={S.tableWrap}>
+                    <table style={S.table}>
+                        <thead>
+                            <tr>
+                                {["Nombre y apellido", "Edad", "Metodología", "Teléfono", "Rutina", "Acciones"].map(h => (
+                                    <th key={h} style={S.th}>{h}</th>
                                 ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* VISTA MOBILE */}
-                <div className="alumnos-list-mobile">
-                    {alumnosFiltrados.length === 0 ? (
-                        <div style={styles.empty}>No se encontraron alumnos.</div>
-                    ) : alumnosFiltrados.map(a => (
-                        <div key={a.id} className="alumno-card-mobile">
-                            <div className="alumno-mobile-header">
-                                <p className="alumno-mobile-name">{a.nombre} {a.apellido}</p>
-                                <span style={{ ...styles.badge, background: a.rutina ? "#eafaf4" : "#fff8e1", color: a.rutina ? "var(--color-primary)" : "#a07000" }}>
-                                    {a.rutina ? "Con rutina asignada" : "Sin rutina asignada"}
-                                </span>
-                            </div>
-
-                            <div className="alumno-mobile-info">
-                                <div className="info-item">
-                                    <p className="alumno-mobile-label">Teléfono</p>
-                                    <p className="alumno-mobile-value">{a.telefono || "-"}</p>
-                                </div>
-                                <div className="info-item">
-                                    <p className="alumno-mobile-label">Metodología</p>
-                                    <p className="alumno-mobile-value">{a.metodologia}</p>
-                                </div>
-                            </div>
-
-                            <div className="alumno-mobile-actions">
-                                <button title="Editar" style={styles.iconBtn} onClick={() => openEditar(a)}>
-                                    <EditIcon />
-                                </button>
-                                
-                                {a.rutina ? (
-                                    <>
-                                        <button title="Ver Rutina" style={{ ...styles.iconBtn, color: "var(--color-primary)" }} onClick={() => {
-                                            setAlumnoParaRutina(a);
-                                            setRutinaEditing(a.rutina);
-                                            setShowEditor(true);
-                                        }}>
-                                            <ViewIcon />
-                                        </button>
-                                        <button title="Compartir" style={{ ...styles.iconBtn, color: "#25a244" }} onClick={() => { setAlumnoCompartir(a); setCopiadoOk(false); }}>
-                                            <ShareIcon />
-                                        </button>
-                                    </>
-                                ) : (
-                                    <button title="Asignar" style={{ ...styles.iconBtn, color: "var(--color-primary-2)" }} onClick={() => {
-                                        setAlumnoParaRutina(a);
-                                        setShowSelectTemplate(true);
-                                    }}>
-                                        <RutinaIcon />
-                                    </button>
-                                )}
-                                
-                                <button title="Eliminar" style={{ ...styles.iconBtn, color: "#c0392b" }} onClick={() => setConfirmDel(a)}>
-                                    <DeleteIcon />
-                                </button>
-                            </div>
-                        </div>
-                    ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {alumnosFiltrados.length === 0 ? (
+                                <tr><td colSpan={6} style={S.empty}>No se encontraron alumnos.</td></tr>
+                            ) : alumnosFiltrados.map(a => (
+                                <tr key={a.id} style={S.tr}>
+                                    <td style={S.td}><strong>{a.nombre} {a.apellido}</strong></td>
+                                    <td style={S.td}>{a.edad}</td>
+                                    <td style={S.td}>
+                                        <span style={{ ...S.badge, background: a.metodologia === "A distancia" ? "#e8f4fd" : "#eafaf4", color: a.metodologia === "A distancia" ? "#1a6fa8" : "var(--color-primary)" }}>
+                                            {a.metodologia}
+                                        </span>
+                                    </td>
+                                    <td style={S.td}>{a.telefono}</td>
+                                    <td style={S.td}>
+                                        <span style={{ ...S.badge, background: a.rutina ? "#eafaf4" : "#fff8e1", color: a.rutina ? "var(--color-primary)" : "#a07000" }}>
+                                            {a.rutina ? "Asignada" : "Sin rutina"}
+                                        </span>
+                                    </td>
+                                    <td style={S.td}>
+                                        <div style={S.acciones}>
+                                            <button title="Editar alumno" style={S.iconBtn} onClick={() => openEditar(a)}>
+                                                <EditIcon />
+                                            </button>
+                                            {a.rutina ? (
+                                                <button title="Ver / Editar rutina" style={{ ...S.iconBtn, color: "var(--color-primary)" }} onClick={() => {
+                                                    setAlumnoParaRutina(a);
+                                                    setRutinaEditing(a.rutina);
+                                                    setShowEditor(true);
+                                                }}>
+                                                    <ViewIcon />
+                                                </button>
+                                            ) : (
+                                                <button title="Asignar rutina" style={{ ...S.iconBtn, color: "var(--color-primary-2)" }} onClick={() => {
+                                                    setAlumnoParaRutina(a);
+                                                    setShowSelectTemplate(true);
+                                                }}>
+                                                    <RutinaIcon />
+                                                </button>
+                                            )}
+                                            {a.rutina && (
+                                                <button title="Compartir rutina" style={{ ...S.iconBtn, color: "#25a244" }} onClick={() => { setAlumnoCompartir(a); setCopiadoOk(false); }}>
+                                                    <ShareIcon />
+                                                </button>
+                                            )}
+                                            <button title="Eliminar alumno" style={{ ...S.iconBtn, color: "#c0392b" }} onClick={() => setConfirmDel(a)}>
+                                                <DeleteIcon />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            {/* Modals */}
+            {/* ── MODAL COMPARTIR ──────────────────────────────────────────── */}
             {alumnoCompartir && (
-                <div style={styles.overlay}>
-                    <div style={{ ...styles.modal, maxWidth: 420 }}>
+                <div style={S.overlay}>
+                    <div style={{ ...S.modal, maxWidth: 420 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-                            <h2 style={{ ...styles.modalTitle, margin: 0 }}>Compartir</h2>
-                            <button style={styles.btnClose} onClick={() => setAlumnoCompartir(null)}>✕</button>
+                            <div>
+                                <h2 style={{ ...S.modalTitle, margin: 0 }}>Compartir rutina</h2>
+                                <p style={{ fontSize: 13, color: "var(--color-text-muted)", margin: "4px 0 0" }}>
+                                    {alumnoCompartir.nombre} {alumnoCompartir.apellido} · {alumnoCompartir.rutina?.nombre}
+                                </p>
+                            </div>
+                            <button style={S.btnClose} onClick={() => setAlumnoCompartir(null)}>✕</button>
                         </div>
-                        <div style={styles.urlBox}>{getUrlRutina(alumnoCompartir)}</div>
+                        <p style={S.shareLabel}>Link único del alumno</p>
+                        <div style={S.urlBox}>{getUrlRutina(alumnoCompartir)}</div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            <button style={{ ...styles.btnShare, background: copiadoOk ? "#25a244" : "var(--color-primary)" }} onClick={() => handleCopiarLink(alumnoCompartir)}>
-                                {copiadoOk ? "¡Copiado!" : "Copiar link"}
+                            <button style={{ ...S.btnShare, background: copiadoOk ? "#25a244" : "var(--color-primary)" }} onClick={() => handleCopiarLink(alumnoCompartir)}>
+                                <CopyIcon size={18} />{copiadoOk ? "¡Link copiado!" : "Copiar link"}
                             </button>
-                            <button style={{ ...styles.btnShare, background: "#25D366" }} onClick={() => handleWhatsApp(alumnoCompartir)}>WhatsApp</button>
+                            <button style={{ ...S.btnShare, background: "#25D366" }} onClick={() => handleWhatsApp(alumnoCompartir)}>
+                                <WhatsAppIcon />Enviar por WhatsApp
+                            </button>
+                        </div>
+                        <p style={{ fontSize: 11, color: "var(--color-text-muted)", textAlign: "center", marginTop: 16 }}>
+                            El alumno puede ver su rutina sin necesidad de login.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL ASIGNAR RUTINA ─────────────────────────────────────── */}
+            {showSelectTemplate && (
+                <div style={S.overlay}>
+                    <div style={{ ...S.modal, maxWidth: "400px" }}>
+                        <h2 style={S.modalTitle}>Asignar rutina a {alumnoParaRutina?.nombre}</h2>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 20 }}>
+                            <button style={{ ...S.btnGuardar, width: "100%", background: "var(--color-primary-2)" }} onClick={openCrearDeCero}>
+                                ✨ Crear rutina desde cero
+                            </button>
+                            <div style={{ margin: "10px 0", textAlign: "center", color: "var(--color-text-muted)", fontSize: 13, fontWeight: 500 }}>
+                                o usar una plantilla genérica
+                            </div>
+                            <div style={S.formField}>
+                                <select style={S.formInput} defaultValue="" onChange={(e) => handleSelectPlantilla(e.target.value)}>
+                                    <option value="" disabled>-- Selecciona una rutina --</option>
+                                    {rutinasGenericas.map(rg => (
+                                        <option key={rg.id} value={rg.id}>{rg.nombre}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div style={{ ...S.modalActions, marginTop: "24px" }}>
+                            <button style={S.btnCancelar} onClick={() => setShowSelectTemplate(false)}>Cancelar</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {showSelectTemplate && (
-                <div style={styles.overlay}>
-                    <div style={{ ...styles.modal, maxWidth: "400px" }}>
-                        <h2 style={styles.modalTitle}>Asignar rutina</h2>
-                        <button style={{ ...styles.btnGuardar, width: "100%", background: "var(--color-primary-2)", marginBottom: 12 }} onClick={openCrearDeCero}>✨ Crear desde cero</button>
-                        <select style={styles.formInput} defaultValue="" onChange={(e) => handleSelectPlantilla(e.target.value)}>
-                            <option value="" disabled>-- Selecciona plantilla --</option>
-                            {rutinasGenericas.map(rg => <option key={rg.id} value={rg.id}>{rg.nombre}</option>)}
-                        </select>
-                        <div style={styles.modalActions}><button style={styles.btnCancelar} onClick={() => setShowSelectTemplate(false)}>Cancelar</button></div>
-                    </div>
-                </div>
-            )}
-
+            {/* ── RUTINA EDITOR ────────────────────────────────────────────── */}
             {showEditor && (
                 <RutinaEditor
                     rutinaInicial={rutinaEditing}
@@ -345,7 +304,9 @@ export default function Inicio() {
                     onClose={() => setShowEditor(false)}
                     onSave={async (rutinaFinal) => {
                         const updates = { rutina: rutinaFinal };
-                        if (!alumnoParaRutina.tokenRutina) updates.tokenRutina = generateId().replace(/-/g, "").slice(0, 12);
+                        if (!alumnoParaRutina.tokenRutina) {
+                            updates.tokenRutina = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+                        }
                         await updateDoc(doc(db, "alumnos", alumnoParaRutina.id), updates);
                         setShowEditor(false);
                         fetchAlumnos();
@@ -353,38 +314,107 @@ export default function Inicio() {
                 />
             )}
 
+            {/* ── MODAL EDITAR / NUEVO ALUMNO ─────────────────────────────── */}
             {showModal && (
-                <div style={styles.overlay}>
-                    <div style={styles.modal}>
-                        <h2 style={styles.modalTitle}>{editando ? "Editar alumno" : "Nuevo alumno"}</h2>
-                        {[{ key: "nombre", label: "Nombre" }, { key: "apellido", label: "Apellido" }, { key: "edad", label: "Edad", type: "number" }, { key: "telefono", label: "Teléfono" }].map(f => (
-                            <div key={f.key} style={styles.formField}>
-                                <label style={styles.formLabel}>{f.label}</label>
-                                <input type={f.type || "text"} value={form[f.key]} onChange={e => setForm({ ...form, [f.key]: e.target.value })} style={styles.formInput} />
+                <div style={S.overlay}>
+                    <div style={S.modal}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+                            <h2 style={{ ...S.modalTitle, margin: 0 }}>
+                                {editando ? "Editar alumno" : "Nuevo alumno"}
+                            </h2>
+                            <button style={S.btnClose} onClick={() => setShowModal(false)}>✕</button>
+                        </div>
+
+                        {[
+                            { key: "nombre", label: "Nombre", type: "text" },
+                            { key: "apellido", label: "Apellido", type: "text" },
+                            { key: "edad", label: "Edad", type: "number" },
+                            { key: "telefono", label: "Teléfono", type: "text" },
+                        ].map(f => (
+                            <div key={f.key} style={S.formField}>
+                                <label style={S.formLabel}>{f.label}</label>
+                                <input
+                                    type={f.type}
+                                    value={form[f.key]}
+                                    onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                                    style={S.formInput}
+                                />
                             </div>
                         ))}
-                        <div style={styles.formField}>
-                            <label style={styles.formLabel}>Metodología</label>
-                            <select value={form.metodologia} onChange={e => setForm({ ...form, metodologia: e.target.value })} style={styles.formInput}>
+
+                        <div style={S.formField}>
+                            <label style={S.formLabel}>Metodología</label>
+                            <select value={form.metodologia} onChange={e => setForm({ ...form, metodologia: e.target.value })} style={S.formInput}>
                                 {METODOLOGIAS.map(m => <option key={m}>{m}</option>)}
                             </select>
                         </div>
-                        <div style={styles.modalActions}>
-                            <button style={styles.btnCancelar} onClick={() => setShowModal(false)}>Cancelar</button>
-                            <button style={styles.btnGuardar} onClick={handleGuardar}>Guardar</button>
+
+                        {/* ── RUTINA ACTIVA: solo si estamos editando y tiene rutina ── */}
+                        {editando && alumnoEditandoActual?.rutina && (
+                            <div style={S.rutinaActivaBox}>
+                                <div style={S.rutinaActivaLeft}>
+                                    <RutinaIcon />
+                                    <div>
+                                        <p style={S.rutinaActivaLabel}>Rutina activa</p>
+                                        <p style={S.rutinaActivaNombre}>
+                                            {alumnoEditandoActual.rutina.nombre || "Sin nombre"}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    style={S.btnQuitarRutina}
+                                    onClick={() => setConfirmQuitarRutina(alumnoEditandoActual)}
+                                >
+                                    <DeleteIcon size={13} color="#c0392b" />
+                                    Quitar
+                                </button>
+                            </div>
+                        )}
+
+                        <div style={S.modalActions}>
+                            <button style={S.btnCancelar} onClick={() => setShowModal(false)}>Cancelar</button>
+                            <button style={S.btnGuardar} onClick={handleGuardar}>Guardar</button>
                         </div>
                     </div>
                 </div>
             )}
 
+            {/* ── CONFIRMAR QUITAR RUTINA ──────────────────────────────────── */}
+            {confirmQuitarRutina && (
+                <div style={{ ...S.overlay, zIndex: 300 }}>
+                    <div style={{ ...S.modal, maxWidth: "360px", textAlign: "center" }}>
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--color-primary)", margin: "12px 0 8px" }}>
+                            ¿Quitar rutina?
+                        </h2>
+                        <p style={{ color: "var(--color-text-muted)", fontSize: 14, margin: "0 0 24px" }}>
+                            Se va a quitar <strong>"{confirmQuitarRutina.rutina?.nombre}"</strong> de {confirmQuitarRutina.nombre} {confirmQuitarRutina.apellido}.<br />
+                            <span style={{ fontSize: 12 }}>La rutina no se elimina, solo se desvincula del alumno.</span>
+                        </p>
+                        <div style={S.modalActions}>
+                            <button style={S.btnCancelar} onClick={() => setConfirmQuitarRutina(null)}>Cancelar</button>
+                            <button style={{ ...S.btnGuardar, background: "#c0392b" }} onClick={() => handleQuitarRutina(confirmQuitarRutina)}>
+                                Quitar rutina
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── CONFIRMAR ELIMINAR ALUMNO ────────────────────────────────── */}
             {confirmDel && (
-                <div style={styles.overlay}>
-                    <div style={{ ...styles.modal, maxWidth: "360px", textAlign: "center" }}>
+                <div style={S.overlay}>
+                    <div style={{ ...S.modal, maxWidth: "360px", textAlign: "center" }}>
                         <DeleteIcon size={32} color="#c0392b" />
-                        <h2 style={{ ...styles.modalTitle, marginTop: "12px" }}>¿Eliminar?</h2>
-                        <div style={styles.modalActions}>
-                            <button style={styles.btnCancelar} onClick={() => setConfirmDel(null)}>Cancelar</button>
-                            <button style={{ ...styles.btnGuardar, background: "#c0392b" }} onClick={() => handleEliminar(confirmDel.id)}>Eliminar</button>
+                        <h2 style={{ ...S.modalTitle, marginTop: "12px" }}>¿Eliminar alumno?</h2>
+                        <p style={{ color: "var(--color-text-muted)", fontSize: "14px", margin: "8px 0 24px" }}>
+                            Vas a eliminar a <strong>{confirmDel.nombre} {confirmDel.apellido}</strong>. Esta acción no se puede deshacer.
+                        </p>
+                        <div style={S.modalActions}>
+                            <button style={S.btnCancelar} onClick={() => setConfirmDel(null)}>Cancelar</button>
+                            <button style={{ ...S.btnGuardar, background: "#c0392b" }} onClick={() => handleEliminar(confirmDel.id)}>Eliminar</button>
                         </div>
                     </div>
                 </div>
@@ -395,9 +425,9 @@ export default function Inicio() {
 
 function StatCard({ label, value, color }) {
     return (
-        <div style={{ ...styles.statCard, borderTop: `4px solid ${color}` }}>
-            <p style={styles.statLabel}>{label}</p>
-            <p style={{ ...styles.statValue, color }}>{value}</p>
+        <div style={{ ...S.statCard, borderTop: `4px solid ${color}` }}>
+            <p style={S.statLabel}>{label}</p>
+            <p style={{ ...S.statValue, color }}>{value}</p>
         </div>
     );
 }
@@ -410,20 +440,15 @@ function CopyIcon({ size = 15 }) { return <svg width={size} height={size} viewBo
 function WhatsAppIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>; }
 function DeleteIcon({ size = 15, color = "currentColor" }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>; }
 
-function FilterIcon() {
-    return (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-        </svg>
-    );
-}
-
-const styles = {
+const S = {
     page: { maxWidth: "1200px", margin: "0 auto", padding: "2rem 1.5rem" },
+    statsGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginBottom: "2rem" },
     statCard: { background: "white", borderRadius: "var(--radius-md)", padding: "1.5rem", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" },
     statLabel: { fontSize: "13px", color: "var(--color-text-muted)", margin: "0 0 8px", fontWeight: "500" },
     statValue: { fontSize: "36px", fontWeight: "700", margin: 0 },
-    search: { padding: "9px 14px", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", fontSize: "14px", color: "var(--color-text)", background: "white", outline: "none" },
+    toolbar: { display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap" },
+    search: { flex: "1", minWidth: "200px", padding: "9px 14px", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", fontSize: "14px", color: "var(--color-text)", background: "white", outline: "none" },
+    filtros: { display: "flex", gap: "8px", flexWrap: "wrap" },
     filtroBtn: { padding: "8px 16px", borderRadius: "var(--radius-sm)", border: "1.5px solid var(--color-border)", background: "white", color: "var(--color-primary)", fontSize: "13px", cursor: "pointer", fontWeight: "500" },
     filtroBtnActive: { background: "var(--color-primary)", color: "white", borderColor: "var(--color-primary)" },
     btnNuevo: { padding: "9px 20px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-sm)", fontSize: "14px", fontWeight: "500", cursor: "pointer" },
@@ -446,6 +471,13 @@ const styles = {
     modalActions: { display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "1.5rem" },
     btnCancelar: { padding: "10px 20px", background: "white", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", fontSize: "14px", cursor: "pointer", color: "var(--color-text)" },
     btnGuardar: { padding: "10px 20px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-sm)", fontSize: "14px", fontWeight: "500", cursor: "pointer" },
+    // Rutina activa dentro del modal
+    rutinaActivaBox: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f6fdf9", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "10px 14px", marginBottom: "1rem" },
+    rutinaActivaLeft: { display: "flex", alignItems: "center", gap: 10, color: "var(--color-primary)" },
+    rutinaActivaLabel: { fontSize: "11px", fontWeight: "600", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 2px" },
+    rutinaActivaNombre: { fontSize: "13px", fontWeight: "600", color: "var(--color-primary)", margin: 0 },
+    btnQuitarRutina: { display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "#fff5f5", border: "1.5px solid #f5c0c0", borderRadius: "var(--radius-sm)", color: "#c0392b", fontSize: "12px", fontWeight: "500", cursor: "pointer" },
+    // Compartir
     shareLabel: { fontSize: 12, fontWeight: 600, color: "var(--color-primary)", letterSpacing: "0.04em", textTransform: "uppercase", margin: "0 0 6px" },
     urlBox: { background: "#f6fdf9", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "10px 14px", fontSize: 12, color: "var(--color-text-muted)", fontFamily: "monospace", wordBreak: "break-all", marginBottom: 14 },
     btnShare: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "12px", borderRadius: "var(--radius-sm)", border: "none", color: "white", fontSize: 14, fontWeight: 500, cursor: "pointer" },
