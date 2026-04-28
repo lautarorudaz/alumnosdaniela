@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./Inicio.css";
 import Navbar from "../components/Navbar";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../firebase/firestore";
@@ -10,7 +11,18 @@ const emptyForm = {
     nombre: "", apellido: "", edad: "", metodologia: "Presencial", telefono: "",
 };
 
+function useIsMobile(breakpoint = 700) {
+    const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
+    useEffect(() => {
+        const handler = () => setIsMobile(window.innerWidth < breakpoint);
+        window.addEventListener("resize", handler);
+        return () => window.removeEventListener("resize", handler);
+    }, [breakpoint]);
+    return isMobile;
+}
+
 export default function Inicio() {
+    const isMobile = useIsMobile();
     const [alumnos, setAlumnos] = useState([]);
     const [rutinasGenericas, setRutinasGenericas] = useState([]);
     const [busqueda, setBusqueda] = useState("");
@@ -141,23 +153,23 @@ export default function Inicio() {
     return (
         <>
             <Navbar />
-            <div style={S.page}>
+            <div className="inicio-page">
 
-                <div style={S.statsGrid}>
+                <div className="stats-grid" style={{ marginTop: "1.5rem" }}>
                     <StatCard label="Total alumnos" value={totalAlumnos} color="var(--color-primary)" />
                     <StatCard label="Alumnos con rutina" value={conRutina} color="var(--color-primary-2)" />
                     <StatCard label="Alumnos sin rutina" value={sinRutina} color="var(--color-accent)" />
                 </div>
 
-                <div style={S.toolbar}>
+                <div className="toolbar">
                     <input
-                        style={S.search}
+                        className="toolbar-search"
                         type="text"
                         placeholder="🔍  Buscar por nombre..."
                         value={busqueda}
                         onChange={e => setBusqueda(e.target.value)}
                     />
-                    <div style={S.filtros}>
+                    <div className="toolbar-filtros">
                         {[
                             { key: "todos", label: "Todos" },
                             { key: "con_rutina", label: "Con rutina" },
@@ -170,72 +182,95 @@ export default function Inicio() {
                             </button>
                         ))}
                     </div>
-                    <button style={S.btnNuevo} onClick={openNuevo}>+ Nuevo alumno</button>
+                    <div className="toolbar-actions">
+                        <button style={S.btnNuevo} onClick={openNuevo}>+ Nuevo alumno</button>
+                    </div>
                 </div>
 
-                <div style={S.tableWrap}>
-                    <table style={S.table}>
-                        <thead>
-                            <tr>
-                                {["Nombre y apellido", "Edad", "Metodología", "Teléfono", "Rutina", "Acciones"].map(h => (
-                                    <th key={h} style={S.th}>{h}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {alumnosFiltrados.length === 0 ? (
-                                <tr><td colSpan={6} style={S.empty}>No se encontraron alumnos.</td></tr>
-                            ) : alumnosFiltrados.map(a => (
-                                <tr key={a.id} style={S.tr}>
-                                    <td style={S.td}><strong>{a.nombre} {a.apellido}</strong></td>
-                                    <td style={S.td}>{a.edad}</td>
-                                    <td style={S.td}>
-                                        <span style={{ ...S.badge, background: a.metodologia === "A distancia" ? "#e8f4fd" : "#eafaf4", color: a.metodologia === "A distancia" ? "#1a6fa8" : "var(--color-primary)" }}>
-                                            {a.metodologia}
-                                        </span>
-                                    </td>
-                                    <td style={S.td}>{a.telefono}</td>
-                                    <td style={S.td}>
-                                        <span style={{ ...S.badge, background: a.rutina ? "#eafaf4" : "#fff8e1", color: a.rutina ? "var(--color-primary)" : "#a07000" }}>
-                                            {a.rutina ? "Asignada" : "Sin rutina"}
-                                        </span>
-                                    </td>
-                                    <td style={S.td}>
-                                        <div style={S.acciones}>
-                                            <button title="Editar alumno" style={S.iconBtn} onClick={() => openEditar(a)}>
-                                                <EditIcon />
-                                            </button>
-                                            {a.rutina ? (
-                                                <button title="Ver / Editar rutina" style={{ ...S.iconBtn, color: "var(--color-primary)" }} onClick={() => {
-                                                    setAlumnoParaRutina(a);
-                                                    setRutinaEditing(a.rutina);
-                                                    setShowEditor(true);
-                                                }}>
-                                                    <ViewIcon />
-                                                </button>
-                                            ) : (
-                                                <button title="Asignar rutina" style={{ ...S.iconBtn, color: "var(--color-primary-2)" }} onClick={() => {
-                                                    setAlumnoParaRutina(a);
-                                                    setShowSelectTemplate(true);
-                                                }}>
-                                                    <RutinaIcon />
-                                                </button>
-                                            )}
-                                            {a.rutina && (
-                                                <button title="Compartir rutina" style={{ ...S.iconBtn, color: "#25a244" }} onClick={() => { setAlumnoCompartir(a); setCopiadoOk(false); }}>
-                                                    <ShareIcon />
-                                                </button>
-                                            )}
-                                            <button title="Eliminar alumno" style={{ ...S.iconBtn, color: "#c0392b" }} onClick={() => setConfirmDel(a)}>
-                                                <DeleteIcon />
-                                            </button>
-                                        </div>
-                                    </td>
+                <div style={{ marginBottom: "1rem" }} />
+
+                {/* ── TABLA (desktop) / CARDS (mobile) ── */}
+                {isMobile ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {alumnosFiltrados.length === 0 ? (
+                            <p style={S.empty}>No se encontraron alumnos.</p>
+                        ) : alumnosFiltrados.map(a => (
+                            <div key={a.id} style={{ background: "white", borderRadius: "var(--radius-md)", boxShadow: "0 1px 4px rgba(0,0,0,0.07)", padding: "14px 16px", border: "1px solid #e8f5ee" }}>
+                                {/* Fila superior: nombre + acciones */}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                                    <p style={{ fontSize: 15, fontWeight: 700, color: "var(--color-primary)", margin: 0 }}>{a.nombre} {a.apellido}</p>
+                                    <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0, marginLeft: 8 }}>
+                                        <button title="Editar alumno" style={S.iconBtn} onClick={() => openEditar(a)}><EditIcon /></button>
+                                        {a.rutina ? (
+                                            <button title="Ver / Editar rutina" style={{ ...S.iconBtn, color: "var(--color-primary)" }} onClick={() => { setAlumnoParaRutina(a); setRutinaEditing(a.rutina); setShowEditor(true); }}><ViewIcon /></button>
+                                        ) : (
+                                            <button title="Asignar rutina" style={{ ...S.iconBtn, color: "var(--color-primary-2)" }} onClick={() => { setAlumnoParaRutina(a); setShowSelectTemplate(true); }}><RutinaIcon /></button>
+                                        )}
+                                        {a.rutina && (
+                                            <button title="Compartir rutina" style={{ ...S.iconBtn, color: "#25a244" }} onClick={() => { setAlumnoCompartir(a); setCopiadoOk(false); }}><ShareIcon /></button>
+                                        )}
+                                        <button title="Eliminar alumno" style={{ ...S.iconBtn, color: "#c0392b" }} onClick={() => setConfirmDel(a)}><DeleteIcon /></button>
+                                    </div>
+                                </div>
+                                {/* Info en columna */}
+                                {a.edad && <p style={{ fontSize: 13, color: "var(--color-text-muted)", margin: "0 0 5px" }}>{a.edad} años</p>}
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "0 0 5px" }}>
+                                    <span style={{ ...S.badge, background: a.metodologia === "A distancia" ? "#e8f4fd" : "#eafaf4", color: a.metodologia === "A distancia" ? "#1a6fa8" : "var(--color-primary)" }}>{a.metodologia}</span>
+                                    <span style={{ ...S.badge, background: a.rutina ? "#eafaf4" : "#fff8e1", color: a.rutina ? "var(--color-primary)" : "#a07000" }}>{a.rutina ? "Con rutina" : "Sin rutina"}</span>
+                                </div>
+                                {a.telefono && <p style={{ fontSize: 13, color: "var(--color-text-muted)", margin: 0 }}>{a.telefono}</p>}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="table-wrap">
+                        <table className="alumnos-table">
+                            <thead>
+                                <tr>
+                                    {["Nombre y apellido", "Edad", "Metodología", "Teléfono", "Rutina", "Acciones"].map(h => (
+                                        <th key={h}>{h}</th>
+                                    ))}
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {alumnosFiltrados.length === 0 ? (
+                                    <tr><td colSpan={6} style={S.empty}>No se encontraron alumnos.</td></tr>
+                                ) : alumnosFiltrados.map(a => (
+                                    <tr key={a.id}>
+                                        <td><strong>{a.nombre} {a.apellido}</strong></td>
+                                        <td>{a.edad}</td>
+                                        <td>
+                                            <span style={{ ...S.badge, background: a.metodologia === "A distancia" ? "#e8f4fd" : "#eafaf4", color: a.metodologia === "A distancia" ? "#1a6fa8" : "var(--color-primary)" }}>
+                                                {a.metodologia}
+                                            </span>
+                                        </td>
+                                        <td>{a.telefono}</td>
+                                        <td>
+                                            <span style={{ ...S.badge, background: a.rutina ? "#eafaf4" : "#fff8e1", color: a.rutina ? "var(--color-primary)" : "#a07000" }}>
+                                                {a.rutina ? "Asignada" : "Sin rutina"}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div style={S.acciones}>
+                                                <button title="Editar alumno" style={S.iconBtn} onClick={() => openEditar(a)}><EditIcon /></button>
+                                                {a.rutina ? (
+                                                    <button title="Ver / Editar rutina" style={{ ...S.iconBtn, color: "var(--color-primary)" }} onClick={() => { setAlumnoParaRutina(a); setRutinaEditing(a.rutina); setShowEditor(true); }}><ViewIcon /></button>
+                                                ) : (
+                                                    <button title="Asignar rutina" style={{ ...S.iconBtn, color: "var(--color-primary-2)" }} onClick={() => { setAlumnoParaRutina(a); setShowSelectTemplate(true); }}><RutinaIcon /></button>
+                                                )}
+                                                {a.rutina && (
+                                                    <button title="Compartir rutina" style={{ ...S.iconBtn, color: "#25a244" }} onClick={() => { setAlumnoCompartir(a); setCopiadoOk(false); }}><ShareIcon /></button>
+                                                )}
+                                                <button title="Eliminar alumno" style={{ ...S.iconBtn, color: "#c0392b" }} onClick={() => setConfirmDel(a)}><DeleteIcon /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
             </div>
 
             {/* ── MODAL COMPARTIR ──────────────────────────────────────────── */}
@@ -329,7 +364,6 @@ export default function Inicio() {
                             { key: "nombre", label: "Nombre", type: "text" },
                             { key: "apellido", label: "Apellido", type: "text" },
                             { key: "edad", label: "Edad", type: "number" },
-                            { key: "telefono", label: "Teléfono", type: "text" },
                         ].map(f => (
                             <div key={f.key} style={S.formField}>
                                 <label style={S.formLabel}>{f.label}</label>
@@ -341,6 +375,27 @@ export default function Inicio() {
                                 />
                             </div>
                         ))}
+
+                        {/* Teléfono con prefijo fijo "54" */}
+                        <div style={S.formField}>
+                            <label style={S.formLabel}>Teléfono</label>
+                            <div style={{ display: "flex", alignItems: "center", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", background: "#f6fdf9", overflow: "hidden" }}>
+                                <span style={{ padding: "10px 10px 10px 14px", fontSize: 14, fontWeight: 600, color: "var(--color-primary)", background: "#eafaf4", borderRight: "1.5px solid var(--color-border)", userSelect: "none", flexShrink: 0 }}>
+                                    54
+                                </span>
+                                <input
+                                    type="text"
+                                    placeholder="9 2615 000000"
+                                    value={form.telefono.startsWith("54") ? form.telefono.slice(2) : form.telefono}
+                                    onChange={e => {
+                                        const digits = e.target.value.replace(/\D/g, "");
+                                        setForm({ ...form, telefono: "54" + digits });
+                                    }}
+                                    style={{ ...S.formInput, border: "none", borderRadius: 0, background: "transparent", outline: "none", flex: 1 }}
+                                />
+                            </div>
+                        </div>
+
 
                         <div style={S.formField}>
                             <label style={S.formLabel}>Metodología</label>
@@ -425,9 +480,9 @@ export default function Inicio() {
 
 function StatCard({ label, value, color }) {
     return (
-        <div style={{ ...S.statCard, borderTop: `4px solid ${color}` }}>
-            <p style={S.statLabel}>{label}</p>
-            <p style={{ ...S.statValue, color }}>{value}</p>
+        <div style={{ background: "white", borderRadius: "var(--radius-md)", padding: "1rem", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", borderTop: `4px solid ${color}` }}>
+            <p className="stat-card-label" style={{ fontSize: "13px", color: "var(--color-text-muted)", margin: "0 0 6px", fontWeight: "500" }}>{label}</p>
+            <p className="stat-card-value" style={{ fontSize: "36px", fontWeight: "700", margin: 0, color }}>{value}</p>
         </div>
     );
 }
@@ -441,8 +496,6 @@ function WhatsAppIcon() { return <svg width="18" height="18" viewBox="0 0 24 24"
 function DeleteIcon({ size = 15, color = "currentColor" }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>; }
 
 const S = {
-    page: { maxWidth: "1200px", margin: "0 auto", padding: "2rem 1.5rem" },
-    statsGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginBottom: "2rem" },
     statCard: { background: "white", borderRadius: "var(--radius-md)", padding: "1.5rem", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" },
     statLabel: { fontSize: "13px", color: "var(--color-text-muted)", margin: "0 0 8px", fontWeight: "500" },
     statValue: { fontSize: "36px", fontWeight: "700", margin: 0 },

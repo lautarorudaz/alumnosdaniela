@@ -50,7 +50,18 @@ function getYoutubeEmbedUrl(url) {
     return null;
 }
 
+function useIsMobile(breakpoint = 700) {
+    const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
+    useEffect(() => {
+        const handler = () => setIsMobile(window.innerWidth < breakpoint);
+        window.addEventListener("resize", handler);
+        return () => window.removeEventListener("resize", handler);
+    }, [breakpoint]);
+    return isMobile;
+}
+
 export default function Ejercicios() {
+    const isMobile = useIsMobile();
     const [ejercicios, setEjercicios] = useState([]);
     const [grupos, setGrupos] = useState(GRUPOS_DEFAULT);
     const [busqueda, setBusqueda] = useState("");
@@ -79,7 +90,27 @@ export default function Ejercicios() {
         } else {
             const lista = snap.docs.map(d => ({ id: d.id, nombre: d.data().nombre }));
             lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
-            setGrupos(lista.map(g => g.nombre));
+            
+            const uniqueNombres = [];
+            const seen = new Set();
+            const duplicates = [];
+            
+            for (const item of lista) {
+                const nombreLower = item.nombre.toLowerCase();
+                if (!seen.has(nombreLower)) {
+                    seen.add(nombreLower);
+                    uniqueNombres.push(item.nombre);
+                } else {
+                    duplicates.push(item);
+                }
+            }
+            
+            setGrupos(uniqueNombres);
+            
+            // Limpiar duplicados de la base de datos
+            duplicates.forEach(async (dup) => {
+                try { await deleteDoc(doc(db, "gruposMusculares", dup.id)); } catch (e) { console.error(e); }
+            });
         }
     };
 
@@ -87,7 +118,18 @@ export default function Ejercicios() {
         const snap = await getDocs(collection(db, "gruposMusculares"));
         const lista = snap.docs.map(d => ({ id: d.id, nombre: d.data().nombre }));
         lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
-        return lista;
+        
+        const unique = [];
+        const seen = new Set();
+        
+        for (const item of lista) {
+            const nombreLower = item.nombre.toLowerCase();
+            if (!seen.has(nombreLower)) {
+                seen.add(nombreLower);
+                unique.push(item);
+            }
+        }
+        return unique;
     };
 
     const fetchEjercicios = async () => {
@@ -160,13 +202,13 @@ export default function Ejercicios() {
             <div style={S.page}>
 
                 {/* HEADER */}
-                <div style={S.header}>
+                <div style={{ marginBottom: "1.5rem" }}>
                     <h1 style={S.titulo}>Ejercicios</h1>
-                    <div style={{ display: "flex", gap: "10px" }}>
-                        <button style={S.btnZonas} onClick={() => setShowZonasModal(true)}>
+                    <div style={{ display: "flex", gap: "10px", marginTop: isMobile ? "10px" : 0, flexWrap: "wrap" }}>
+                        <button style={{ ...S.btnZonas, ...(isMobile ? { flex: 1 } : {}) }} onClick={() => setShowZonasModal(true)}>
                             <MuscleIcon /> Zonas musculares
                         </button>
-                        <button style={S.btnNuevo} onClick={openNuevo}>+ Nuevo ejercicio</button>
+                        <button style={{ ...S.btnNuevo, ...(isMobile ? { flex: 1 } : {}) }} onClick={openNuevo}>+ Nuevo ejercicio</button>
                     </div>
                 </div>
 
