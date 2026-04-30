@@ -18,6 +18,8 @@ export default function Comentarios() {
     const [seguimientos, setSeguimientos] = useState([]);
     const [cargandoSeg, setCargandoSeg] = useState(true);
     const [alumnoAbierto, setAlumnoAbierto] = useState(null);
+    // filtros por alumno: { [alumnoId]: { semana: "", dia: "" } }
+    const [filtrosProgreso, setFiltrosProgreso] = useState({});
 
     const navigate = useNavigate();
 
@@ -98,6 +100,26 @@ export default function Comentarios() {
             acc[r.ejercicioNombre].push(r);
             return acc;
         }, {});
+
+    // Obtener semanas únicas de un alumno (ordenadas)
+    const semanasDeAlumno = (registros) =>
+        [...new Set(registros.map(r => r.semana).filter(Boolean))]
+            .sort((a, b) => parseInt(a.replace(/\D/g, "") || 0) - parseInt(b.replace(/\D/g, "") || 0));
+
+    // Obtener días únicos de un alumno filtrados por semana
+    const diasDeAlumno = (registros, semana) =>
+        [...new Set(
+            registros
+                .filter(r => !semana || r.semana === semana)
+                .map(r => r.dia)
+                .filter(Boolean)
+        )].sort();
+
+    const setFiltroAlumno = (alumnoId, campo, valor) =>
+        setFiltrosProgreso(prev => ({
+            ...prev,
+            [alumnoId]: { ...(prev[alumnoId] || {}), [campo]: valor }
+        }));
 
     const formatFecha = (ts) => {
         if (!ts) return "";
@@ -257,6 +279,7 @@ export default function Comentarios() {
                                 {alumnosConProgreso.map(alumno => {
                                     const abierto = alumnoAbierto === alumno.alumnoId;
                                     const porEjercicio = agruparPorEjercicio(alumno.registros);
+                                    // (solo se usa en el header para el conteo)
 
                                     return (
                                         <div key={alumno.alumnoId} style={S.alumnoCard}>
@@ -279,36 +302,80 @@ export default function Comentarios() {
                                             </button>
 
                                             {/* Detalle */}
-                                            {abierto && (
-                                                <div style={S.alumnoDetalle}>
-                                                    {Object.entries(porEjercicio).map(([ejercicioNombre, entradas]) => (
-                                                        <div key={ejercicioNombre} style={S.ejercicioBloque}>
-                                                            <p style={S.ejercicioTitulo}>{ejercicioNombre}</p>
-                                                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                                                {[...entradas]
-                                                                    .sort((a, b) => {
-                                                                        const numA = parseInt(a.semana?.replace(/\D/g, "") || "0");
-                                                                        const numB = parseInt(b.semana?.replace(/\D/g, "") || "0");
-                                                                        return numA - numB;
-                                                                    })
-                                                                    .map(entrada => (
-                                                                        <div key={entrada.id} style={S.entradaRow}>
-                                                                            <div style={S.entradaMeta}>
-                                                                                <span style={S.semanaTag}>{entrada.semana}</span>
-                                                                                <span style={S.diaTag}>{entrada.dia}</span>
-                                                                            </div>
-                                                                            <p style={S.entradaTexto}>"{entrada.texto}"</p>
-                                                                            {entrada.fecha && (
-                                                                                <p style={S.entradaFecha}>{formatFecha(entrada.fecha)}</p>
-                                                                            )}
-                                                                        </div>
-                                                                    ))
-                                                                }
-                                                            </div>
+                                            {abierto && (() => {
+                                                const filtro = filtrosProgreso[alumno.alumnoId] || {};
+                                                const semanas = semanasDeAlumno(alumno.registros);
+                                                const dias = diasDeAlumno(alumno.registros, filtro.semana);
+                                                const registrosFiltrados = alumno.registros.filter(r =>
+                                                    (!filtro.semana || r.semana === filtro.semana) &&
+                                                    (!filtro.dia || r.dia === filtro.dia)
+                                                );
+                                                const porEjercicioFiltrado = agruparPorEjercicio(registrosFiltrados);
+                                                return (
+                                                    <div style={S.alumnoDetalle}>
+
+                                                        {/* ── Filtros semana / día ── */}
+                                                        <div style={S.filtroProgresoWrap}>
+                                                            <select
+                                                                style={S.filtroProgresoSelect}
+                                                                value={filtro.semana || ""}
+                                                                onChange={e => {
+                                                                    setFiltroAlumno(alumno.alumnoId, "semana", e.target.value);
+                                                                    setFiltroAlumno(alumno.alumnoId, "dia", "");
+                                                                }}
+                                                            >
+                                                                <option value="">Todas las semanas</option>
+                                                                {semanas.map(s => <option key={s} value={s}>{s}</option>)}
+                                                            </select>
+                                                            <select
+                                                                style={S.filtroProgresoSelect}
+                                                                value={filtro.dia || ""}
+                                                                onChange={e => setFiltroAlumno(alumno.alumnoId, "dia", e.target.value)}
+                                                                disabled={!filtro.semana}
+                                                            >
+                                                                <option value="">Todos los días</option>
+                                                                {dias.map(d => <option key={d} value={d}>{d}</option>)}
+                                                            </select>
+                                                            {(filtro.semana || filtro.dia) && (
+                                                                <button
+                                                                    style={S.filtroProgresoReset}
+                                                                    onClick={() => setFiltrosProgreso(prev => ({ ...prev, [alumno.alumnoId]: {} }))}
+                                                                >
+                                                                    ✕ Limpiar
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            )}
+
+                                                        {/* ── Registros ── */}
+                                                        {Object.keys(porEjercicioFiltrado).length === 0 ? (
+                                                            <p style={{ fontSize: 13, color: "var(--color-text-muted)", textAlign: "center", padding: "1rem 0" }}>
+                                                                Sin registros para este filtro.
+                                                            </p>
+                                                        ) : Object.entries(porEjercicioFiltrado).map(([ejercicioNombre, entradas]) => (
+                                                            <div key={ejercicioNombre} style={S.ejercicioBloque}>
+                                                                <p style={S.ejercicioTitulo}>{ejercicioNombre}</p>
+                                                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                                                    {[...entradas]
+                                                                        .sort((a, b) => parseInt(a.semana?.replace(/\D/g, "") || 0) - parseInt(b.semana?.replace(/\D/g, "") || 0))
+                                                                        .map(entrada => (
+                                                                            <div key={entrada.id} style={S.entradaRow}>
+                                                                                <div style={S.entradaMeta}>
+                                                                                    <span style={S.semanaTag}>{entrada.semana}</span>
+                                                                                    <span style={S.diaTag}>{entrada.dia}</span>
+                                                                                </div>
+                                                                                <p style={S.entradaTexto}>"{entrada.texto}"</p>
+                                                                                {entrada.fecha && (
+                                                                                    <p style={S.entradaFecha}>{formatFecha(entrada.fecha)}</p>
+                                                                                )}
+                                                                            </div>
+                                                                        ))
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     );
                                 })}
@@ -387,6 +454,9 @@ const S = {
     alumnoCard: { background: "white", borderRadius: "var(--radius-md)", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1.5px solid #e8f5ee" },
     alumnoHeader: { width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", background: "none", border: "none", cursor: "pointer", color: "var(--color-primary)" },
     alumnoDetalle: { padding: "0 18px 18px", display: "flex", flexDirection: "column", gap: 16, borderTop: "1px solid #f0faf5" },
+    filtroProgresoWrap: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", paddingTop: 14 },
+    filtroProgresoSelect: { padding: "7px 12px", borderRadius: 8, border: "1.5px solid #c8ead9", fontSize: 13, color: "var(--color-primary)", background: "#f6fdf9", outline: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 500 },
+    filtroProgresoReset: { padding: "6px 12px", borderRadius: 8, border: "1.5px solid #f9a8a8", fontSize: 12, color: "#c0392b", background: "white", cursor: "pointer", fontWeight: 600 },
     ejercicioBloque: { paddingTop: 14 },
     ejercicioTitulo: { fontSize: 13, fontWeight: 700, color: "var(--color-primary)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 10px", borderBottom: "1px dashed #d0f0e4", paddingBottom: 6 },
     entradaRow: { background: "#f6fdf9", borderRadius: 8, padding: "10px 12px", border: "1px solid #e0f5ec" },
