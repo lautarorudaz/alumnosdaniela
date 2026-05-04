@@ -118,10 +118,25 @@ export default function RutinaEditor({ rutinaInicial, titulo, onClose, onSave })
     const setNombreRutina = (v) => setRutina(r => ({ ...r, nombre: v }));
 
     const addSemana = () =>
-        setRutina(r => ({
-            ...r,
-            semanas: [...r.semanas, crearSemana(r.semanas.length + 1, 1)],
-        }));
+        setRutina(r => {
+            const ultimaSemana = r.semanas[r.semanas.length - 1];
+            const nuevaSemana = {
+                id: generateId(),
+                nombre: `Semana ${r.semanas.length + 1}`,
+                dias: ultimaSemana.dias.map(dia => ({
+                    ...dia,
+                    id: generateId(),
+                    etapas: dia.etapas.map(etapa => ({
+                        ...etapa,
+                        ejercicios: etapa.ejercicios.map(ej => ({
+                            ...ej,
+                            id: generateId(),
+                        })),
+                    })),
+                })),
+            };
+            return { ...r, semanas: [...r.semanas, nuevaSemana] };
+        });
 
     const removeSemana = (semanaId) =>
         setRutina(r => ({ ...r, semanas: r.semanas.filter(s => s.id !== semanaId) }));
@@ -153,11 +168,11 @@ export default function RutinaEditor({ rutinaInicial, titulo, onClose, onSave })
         }));
 
     const addEjercicio = (semanaId, diaId, etapaNombre, ejercicioBase) => {
-        const nuevo = { 
-            ...emptyEjercicio, 
-            nombre: ejercicioBase?.nombre || "", 
-            youtubeUrl: ejercicioBase?.youtubeUrl || "", 
-            id: generateId() 
+        const nuevo = {
+            ...emptyEjercicio,
+            nombre: ejercicioBase?.nombre || "",
+            youtubeUrl: ejercicioBase?.youtubeUrl || "",
+            id: generateId()
         };
         setRutina(r => ({
             ...r,
@@ -307,77 +322,77 @@ export default function RutinaEditor({ rutinaInicial, titulo, onClose, onSave })
                                                         {etapa.ejercicios.map(ej => {
                                                             const colapsado = isEjColapsado(ej.id);
                                                             return (
-                                                            <div key={ej.id} style={{ ...S.ejWrap, padding: colapsado ? "7px 10px" : "8px 10px" }}>
-                                                                {/* Fila header: toggle + nombre/resumen + delete */}
-                                                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                                                    <button
-                                                                        onClick={() => toggleEj(ej.id)}
-                                                                        style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--color-primary-2)", flexShrink: 0, display: "flex", alignItems: "center" }}
-                                                                        title={colapsado ? "Expandir" : "Colapsar"}
-                                                                    >
-                                                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                                                                            style={{ transition: "transform 0.2s", transform: colapsado ? "rotate(-90deg)" : "rotate(0deg)" }}>
-                                                                            <polyline points="6 9 12 15 18 9" />
-                                                                        </svg>
-                                                                    </button>
+                                                                <div key={ej.id} style={{ ...S.ejWrap, padding: colapsado ? "7px 10px" : "8px 10px" }}>
+                                                                    {/* Fila header: toggle + nombre/resumen + delete */}
+                                                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                                                        <button
+                                                                            onClick={() => toggleEj(ej.id)}
+                                                                            style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--color-primary-2)", flexShrink: 0, display: "flex", alignItems: "center" }}
+                                                                            title={colapsado ? "Expandir" : "Colapsar"}
+                                                                        >
+                                                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                                                                                style={{ transition: "transform 0.2s", transform: colapsado ? "rotate(-90deg)" : "rotate(0deg)" }}>
+                                                                                <polyline points="6 9 12 15 18 9" />
+                                                                            </svg>
+                                                                        </button>
 
-                                                                    {colapsado ? (
-                                                                        // Vista colapsada: nombre + serie×rep
-                                                                        <>
-                                                                            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--color-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                                                                {ej.nombre || <span style={{ color: "#bbb" }}>Sin nombre</span>}
-                                                                            </span>
-                                                                            {(ej.series || ej.reps) && (
-                                                                                <span style={{ fontSize: 12, color: "var(--color-text-muted)", flexShrink: 0, marginRight: 4 }}>
-                                                                                    {ej.series || "–"} × {ej.reps || "–"}
+                                                                        {colapsado ? (
+                                                                            // Vista colapsada: nombre + serie×rep
+                                                                            <>
+                                                                                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--color-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                                                    {ej.nombre || <span style={{ color: "#bbb" }}>Sin nombre</span>}
                                                                                 </span>
-                                                                            )}
-                                                                        </>
-                                                                    ) : (
-                                                                        // Vista expandida: input nombre en la misma fila header
-                                                                        <input
-                                                                            style={{ ...S.ejInput, flex: 1, minWidth: 0 }}
-                                                                            placeholder="Nombre del ejercicio"
-                                                                            value={ej.nombre}
-                                                                            onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "nombre", e.target.value)}
-                                                                        />
-                                                                    )}
-
-                                                                    <button
-                                                                        style={{ ...S.iconBtn, color: "#c0392b", flexShrink: 0 }}
-                                                                        onClick={() => removeEjercicio(semana.id, dia.id, etapa.nombre, ej.id)}
-                                                                    >
-                                                                        <DeleteIcon size={13} />
-                                                                    </button>
-                                                                </div>
-
-                                                                {/* Cuerpo expandido: series, reps, observación */}
-                                                                {!colapsado && (
-                                                                    <div style={{ marginTop: 7, display: "flex", flexDirection: "column", gap: 6 }}>
-                                                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                                                                {(ej.series || ej.reps) && (
+                                                                                    <span style={{ fontSize: 12, color: "var(--color-text-muted)", flexShrink: 0, marginRight: 4 }}>
+                                                                                        {ej.series || "–"} × {ej.reps || "–"}
+                                                                                    </span>
+                                                                                )}
+                                                                            </>
+                                                                        ) : (
+                                                                            // Vista expandida: input nombre en la misma fila header
                                                                             <input
-                                                                                style={{ ...S.ejInput, flex: 1 }}
-                                                                                placeholder="Series"
-                                                                                value={ej.series}
-                                                                                onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "series", e.target.value)}
+                                                                                style={{ ...S.ejInput, flex: 1, minWidth: 0 }}
+                                                                                placeholder="Nombre del ejercicio"
+                                                                                value={ej.nombre}
+                                                                                onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "nombre", e.target.value)}
                                                                             />
-                                                                            <span style={S.ejSep}>×</span>
+                                                                        )}
+
+                                                                        <button
+                                                                            style={{ ...S.iconBtn, color: "#c0392b", flexShrink: 0 }}
+                                                                            onClick={() => removeEjercicio(semana.id, dia.id, etapa.nombre, ej.id)}
+                                                                        >
+                                                                            <DeleteIcon size={13} />
+                                                                        </button>
+                                                                    </div>
+
+                                                                    {/* Cuerpo expandido: series, reps, observación */}
+                                                                    {!colapsado && (
+                                                                        <div style={{ marginTop: 7, display: "flex", flexDirection: "column", gap: 6 }}>
+                                                                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                                                                <input
+                                                                                    style={{ ...S.ejInput, flex: 1 }}
+                                                                                    placeholder="Series"
+                                                                                    value={ej.series}
+                                                                                    onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "series", e.target.value)}
+                                                                                />
+                                                                                <span style={S.ejSep}>×</span>
+                                                                                <input
+                                                                                    style={{ ...S.ejInput, flex: 1 }}
+                                                                                    placeholder="Reps"
+                                                                                    value={ej.reps}
+                                                                                    onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "reps", e.target.value)}
+                                                                                />
+                                                                            </div>
                                                                             <input
-                                                                                style={{ ...S.ejInput, flex: 1 }}
-                                                                                placeholder="Reps"
-                                                                                value={ej.reps}
-                                                                                onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "reps", e.target.value)}
+                                                                                style={{ ...S.ejInput, width: "100%", boxSizing: "border-box" }}
+                                                                                placeholder="Observación (opcional)..."
+                                                                                value={ej.observacion}
+                                                                                onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "observacion", e.target.value)}
                                                                             />
                                                                         </div>
-                                                                        <input
-                                                                            style={{ ...S.ejInput, width: "100%", boxSizing: "border-box" }}
-                                                                            placeholder="Observación (opcional)..."
-                                                                            value={ej.observacion}
-                                                                            onChange={e => updateEjercicio(semana.id, dia.id, etapa.nombre, ej.id, "observacion", e.target.value)}
-                                                                        />
-                                                                    </div>
-                                                                )}
-                                                            </div>
+                                                                    )}
+                                                                </div>
                                                             );
                                                         })}
 
