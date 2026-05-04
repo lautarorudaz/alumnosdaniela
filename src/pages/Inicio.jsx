@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./Inicio.css";
 import Navbar from "../components/Navbar";
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase/firestore";
 import RutinaEditor, { emptyRutina } from "../components/RutinaEditor";
 
@@ -28,7 +28,7 @@ export default function Inicio() {
     const [busqueda, setBusqueda] = useState("");
     const [filtro, setFiltro] = useState("todos");
     const [showModal, setShowModal] = useState(false);
-    const [editando, setEditando] = useState(null); // objeto alumno completo
+    const [editando, setEditando] = useState(null);
     const [form, setForm] = useState(emptyForm);
     const [confirmDel, setConfirmDel] = useState(null);
     const [confirmQuitarRutina, setConfirmQuitarRutina] = useState(null);
@@ -40,6 +40,12 @@ export default function Inicio() {
 
     const [alumnoCompartir, setAlumnoCompartir] = useState(null);
     const [copiadoOk, setCopiadoOk] = useState(false);
+
+    // Historial
+    const [alumnoHistorial, setAlumnoHistorial] = useState(null); // alumno para ver historial
+    const [historial, setHistorial] = useState([]);
+    const [cargandoHistorial, setCargandoHistorial] = useState(false);
+    const [rutinaVistaPrevia, setRutinaVistaPrevia] = useState(null); // rutina del historial en modo lectura
 
     const fetchAlumnos = async () => {
         const snap = await getDocs(collection(db, "alumnos"));
@@ -65,15 +71,11 @@ export default function Inicio() {
         return matchBusqueda && matchFiltro;
     });
 
-    const openNuevo = () => {
-        setForm(emptyForm);
-        setEditando(null);
-        setShowModal(true);
-    };
+    const openNuevo = () => { setForm(emptyForm); setEditando(null); setShowModal(true); };
 
     const openEditar = (a) => {
         setForm({ nombre: a.nombre, apellido: a.apellido, edad: a.edad, metodologia: a.metodologia, telefono: a.telefono });
-        setEditando(a); // guardamos el alumno completo para acceder a su rutina
+        setEditando(a);
         setShowModal(true);
     };
 
@@ -95,8 +97,18 @@ export default function Inicio() {
         fetchAlumnos();
     };
 
+    // Quitar rutina → guardar en historial antes
     const handleQuitarRutina = async (alumno) => {
-        await updateDoc(doc(db, "alumnos", alumno.id), { rutina: null });
+        if (alumno.rutina) {
+            await addDoc(collection(db, "historialRutinas"), {
+                alumnoId: alumno.id,
+                alumnoNombre: `${alumno.nombre} ${alumno.apellido}`,
+                rutina: alumno.rutina,
+                fechaInicio: alumno.fechaAsignacionRutina || null,
+                fechaFin: serverTimestamp(),
+            });
+        }
+        await updateDoc(doc(db, "alumnos", alumno.id), { rutina: null, fechaAsignacionRutina: null });
         setConfirmQuitarRutina(null);
         setShowModal(false);
         fetchAlumnos();
@@ -145,10 +157,49 @@ export default function Inicio() {
         window.open(`https://wa.me/${alumno.telefono?.replace(/\D/g, "")}?text=${encodeURIComponent(texto)}`, "_blank");
     };
 
-    // Alumno actualizado desde el state (para reflejar cambios tras fetchAlumnos)
-    const alumnoEditandoActual = editando
-        ? alumnos.find(a => a.id === editando.id)
-        : null;
+    // Abrir historial de un alumno
+    const abrirHistorial = async (alumno) => {
+        setAlumnoHistorial(alumno);
+        setCargandoHistorial(true);
+        setHistorial([]);
+        try {
+            const q = query(collection(db, "historialRutinas"), where("alumnoId", "==", alumno.id));
+            const snap = await getDocs(q);
+            const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Ordenar por fecha de fin descendente
+            docs.sort((a, b) => (b.fechaFin?.seconds || 0) - (a.fechaFin?.seconds || 0));
+            setHistorial(docs);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setCargandoHistorial(false);
+        }
+    };
+
+    const formatFecha = (ts) => {
+        if (!ts) return "Fecha sin datos";
+        const d = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
+        return d.toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
+    };
+
+    const alumnoEditandoActual = editando ? alumnos.find(a => a.id === editando.id) : null;
+
+    // Botones de acción reutilizables
+    const renderAcciones = (a) => (
+        <div style={S.acciones}>
+            <button title="Editar alumno" style={S.iconBtn} onClick={() => openEditar(a)}><EditIcon /></button>
+            {a.rutina ? (
+                <button title="Ver / Editar rutina" style={{ ...S.iconBtn, color: "var(--color-primary)" }} onClick={() => { setAlumnoParaRutina(a); setRutinaEditing(a.rutina); setShowEditor(true); }}><ViewIcon /></button>
+            ) : (
+                <button title="Asignar rutina" style={{ ...S.iconBtn, color: "var(--color-primary-2)" }} onClick={() => { setAlumnoParaRutina(a); setShowSelectTemplate(true); }}><RutinaIcon /></button>
+            )}
+            {a.rutina && (
+                <button title="Compartir rutina" style={{ ...S.iconBtn, color: "#25a244" }} onClick={() => { setAlumnoCompartir(a); setCopiadoOk(false); }}><ShareIcon /></button>
+            )}
+            <button title="Historial de rutinas" style={{ ...S.iconBtn, color: "#7c3aed" }} onClick={() => abrirHistorial(a)}><HistorialIcon /></button>
+            <button title="Eliminar alumno" style={{ ...S.iconBtn, color: "#c0392b" }} onClick={() => setConfirmDel(a)}><DeleteIcon /></button>
+        </div>
+    );
 
     return (
         <>
@@ -189,30 +240,16 @@ export default function Inicio() {
 
                 <div style={{ marginBottom: "1rem" }} />
 
-                {/* ── TABLA (desktop) / CARDS (mobile) ── */}
                 {isMobile ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                         {alumnosFiltrados.length === 0 ? (
                             <p style={S.empty}>No se encontraron alumnos.</p>
                         ) : alumnosFiltrados.map(a => (
                             <div key={a.id} style={{ background: "white", borderRadius: "var(--radius-md)", boxShadow: "0 1px 4px rgba(0,0,0,0.07)", padding: "14px 16px", border: "1px solid #e8f5ee" }}>
-                                {/* Fila superior: nombre + acciones */}
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                                     <p style={{ fontSize: 15, fontWeight: 700, color: "var(--color-primary)", margin: 0 }}>{a.nombre} {a.apellido}</p>
-                                    <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0, marginLeft: 8 }}>
-                                        <button title="Editar alumno" style={S.iconBtn} onClick={() => openEditar(a)}><EditIcon /></button>
-                                        {a.rutina ? (
-                                            <button title="Ver / Editar rutina" style={{ ...S.iconBtn, color: "var(--color-primary)" }} onClick={() => { setAlumnoParaRutina(a); setRutinaEditing(a.rutina); setShowEditor(true); }}><ViewIcon /></button>
-                                        ) : (
-                                            <button title="Asignar rutina" style={{ ...S.iconBtn, color: "var(--color-primary-2)" }} onClick={() => { setAlumnoParaRutina(a); setShowSelectTemplate(true); }}><RutinaIcon /></button>
-                                        )}
-                                        {a.rutina && (
-                                            <button title="Compartir rutina" style={{ ...S.iconBtn, color: "#25a244" }} onClick={() => { setAlumnoCompartir(a); setCopiadoOk(false); }}><ShareIcon /></button>
-                                        )}
-                                        <button title="Eliminar alumno" style={{ ...S.iconBtn, color: "#c0392b" }} onClick={() => setConfirmDel(a)}><DeleteIcon /></button>
-                                    </div>
+                                    {renderAcciones(a)}
                                 </div>
-                                {/* Info en columna */}
                                 {a.edad && <p style={{ fontSize: 13, color: "var(--color-text-muted)", margin: "0 0 5px" }}>{a.edad} años</p>}
                                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "0 0 5px" }}>
                                     <span style={{ ...S.badge, background: a.metodologia === "A distancia" ? "#e8f4fd" : "#eafaf4", color: a.metodologia === "A distancia" ? "#1a6fa8" : "var(--color-primary)" }}>{a.metodologia}</span>
@@ -250,28 +287,136 @@ export default function Inicio() {
                                                 {a.rutina ? "Asignada" : "Sin rutina"}
                                             </span>
                                         </td>
-                                        <td>
-                                            <div style={S.acciones}>
-                                                <button title="Editar alumno" style={S.iconBtn} onClick={() => openEditar(a)}><EditIcon /></button>
-                                                {a.rutina ? (
-                                                    <button title="Ver / Editar rutina" style={{ ...S.iconBtn, color: "var(--color-primary)" }} onClick={() => { setAlumnoParaRutina(a); setRutinaEditing(a.rutina); setShowEditor(true); }}><ViewIcon /></button>
-                                                ) : (
-                                                    <button title="Asignar rutina" style={{ ...S.iconBtn, color: "var(--color-primary-2)" }} onClick={() => { setAlumnoParaRutina(a); setShowSelectTemplate(true); }}><RutinaIcon /></button>
-                                                )}
-                                                {a.rutina && (
-                                                    <button title="Compartir rutina" style={{ ...S.iconBtn, color: "#25a244" }} onClick={() => { setAlumnoCompartir(a); setCopiadoOk(false); }}><ShareIcon /></button>
-                                                )}
-                                                <button title="Eliminar alumno" style={{ ...S.iconBtn, color: "#c0392b" }} onClick={() => setConfirmDel(a)}><DeleteIcon /></button>
-                                            </div>
-                                        </td>
+                                        <td>{renderAcciones(a)}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
                 )}
-
             </div>
+
+            {/* ── MODAL HISTORIAL ──────────────────────────────────────────── */}
+            {alumnoHistorial && (
+                <div style={S.overlay}>
+                    <div style={{ ...S.modal, maxWidth: 560, maxHeight: "85vh", overflowY: "auto" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+                            <div>
+                                <h2 style={{ ...S.modalTitle, margin: 0 }}>Historial de rutinas</h2>
+                                <p style={{ fontSize: 13, color: "var(--color-text-muted)", margin: "4px 0 0" }}>
+                                    {alumnoHistorial.nombre} {alumnoHistorial.apellido}
+                                </p>
+                            </div>
+                            <button style={S.btnClose} onClick={() => setAlumnoHistorial(null)}>✕</button>
+                        </div>
+
+                        {cargandoHistorial ? (
+                            <p style={{ textAlign: "center", color: "var(--color-text-muted)", padding: "2rem 0" }}>Cargando historial...</p>
+                        ) : historial.length === 0 ? (
+                            <div style={{ textAlign: "center", padding: "2rem 0" }}>
+                                <HistorialIcon size={36} color="#5ccda7" />
+                                <p style={{ color: "var(--color-text-muted)", fontSize: 14, marginTop: 12 }}>
+                                    No hay rutinas anteriores registradas.
+                                </p>
+                                <p style={{ color: "var(--color-text-muted)", fontSize: 12, marginTop: 4 }}>
+                                    Las rutinas se guardan cuando se quitan del alumno.
+                                </p>
+                            </div>
+                        ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                {historial.map(h => (
+                                    <div key={h.id} style={S.historialCard}>
+                                        <div style={S.historialCardTop}>
+                                            <div>
+                                                <p style={S.historialNombre}>{h.rutina?.nombre || "Sin nombre"}</p>
+                                                <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
+                                                    <span style={S.historialFecha}>
+                                                        <span style={{ color: "var(--color-text-muted)" }}>Inicio: </span>
+                                                        {formatFecha(h.fechaInicio)}
+                                                    </span>
+                                                    <span style={S.historialFecha}>
+                                                        <span style={{ color: "var(--color-text-muted)" }}>Fin: </span>
+                                                        {formatFecha(h.fechaFin)}
+                                                    </span>
+                                                </div>
+                                                {h.rutina?.semanas && (
+                                                    <p style={{ fontSize: 11, color: "var(--color-text-muted)", margin: "4px 0 0" }}>
+                                                        {h.rutina.semanas.length} semana{h.rutina.semanas.length !== 1 ? "s" : ""} · {h.rutina.semanas[0]?.dias?.length} días/semana
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <button
+                                                style={S.btnVerRutina}
+                                                onClick={() => setRutinaVistaPrevia(h)}
+                                            >
+                                                Ver rutina
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ── VISTA PREVIA RUTINA HISTORIAL (solo lectura) ─────────────── */}
+            {rutinaVistaPrevia && (
+                <div style={{ ...S.overlay, zIndex: 300 }}>
+                    <div style={{ ...S.modal, maxWidth: 700, maxHeight: "90vh", overflowY: "auto" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+                            <div>
+                                <h2 style={{ ...S.modalTitle, margin: 0 }}>{rutinaVistaPrevia.rutina?.nombre}</h2>
+                                <p style={{ fontSize: 12, color: "var(--color-text-muted)", margin: "4px 0 0" }}>
+                                    Fin: {formatFecha(rutinaVistaPrevia.fechaFin)} · Solo lectura
+                                </p>
+                            </div>
+                            <button style={S.btnClose} onClick={() => setRutinaVistaPrevia(null)}>✕</button>
+                        </div>
+
+                        {rutinaVistaPrevia.rutina?.semanas?.map((semana, si) => (
+                            <div key={semana.id || si} style={S.semanaPreview}>
+                                <div style={S.semanaPreviewHeader}>
+                                    <span style={S.semanaPreviewTitle}>{semana.nombre}</span>
+                                    <span style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
+                                        {semana.dias?.length} día{semana.dias?.length !== 1 ? "s" : ""}
+                                    </span>
+                                </div>
+                                <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                                    {semana.dias?.map((dia, di) => (
+                                        <div key={dia.id || di} style={S.diaPreview}>
+                                            <p style={S.diaPreviewNombre}>{dia.nombre}</p>
+                                            {dia.etapas?.map((etapa, ei) => {
+                                                if (!etapa.ejercicios?.length) return null;
+                                                return (
+                                                    <div key={etapa.nombre || ei} style={{ marginBottom: 8 }}>
+                                                        <p style={S.etapaPreviewLabel}>{etapa.nombre}</p>
+                                                        {etapa.ejercicios.map((ej, eji) => (
+                                                            <div key={ej.id || eji} style={S.ejPreviewRow}>
+                                                                <span style={S.ejPreviewNombre}>{ej.nombre}</span>
+                                                                {(ej.series || ej.reps) && (
+                                                                    <span style={S.ejPreviewMeta}>{ej.series || "–"} × {ej.reps || "–"}</span>
+                                                                )}
+                                                                {ej.observacion && (
+                                                                    <span style={S.ejPreviewObs}>· {ej.observacion}</span>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+
+                        <div style={{ ...S.modalActions, marginTop: "1rem" }}>
+                            <button style={S.btnCancelar} onClick={() => setRutinaVistaPrevia(null)}>Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ── MODAL COMPARTIR ──────────────────────────────────────────── */}
             {alumnoCompartir && (
@@ -342,6 +487,10 @@ export default function Inicio() {
                         if (!alumnoParaRutina.tokenRutina) {
                             updates.tokenRutina = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
                         }
+                        // Guardar fecha de asignación si es nueva rutina
+                        if (!alumnoParaRutina.rutina) {
+                            updates.fechaAsignacionRutina = serverTimestamp();
+                        }
                         await updateDoc(doc(db, "alumnos", alumnoParaRutina.id), updates);
                         setShowEditor(false);
                         fetchAlumnos();
@@ -376,7 +525,6 @@ export default function Inicio() {
                             </div>
                         ))}
 
-                        {/* Teléfono con prefijo fijo "54" */}
                         <div style={S.formField}>
                             <label style={S.formLabel}>Teléfono</label>
                             <div style={{ display: "flex", alignItems: "center", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", background: "#f6fdf9", overflow: "hidden" }}>
@@ -396,7 +544,6 @@ export default function Inicio() {
                             </div>
                         </div>
 
-
                         <div style={S.formField}>
                             <label style={S.formLabel}>Metodología</label>
                             <select value={form.metodologia} onChange={e => setForm({ ...form, metodologia: e.target.value })} style={S.formInput}>
@@ -404,22 +551,16 @@ export default function Inicio() {
                             </select>
                         </div>
 
-                        {/* ── RUTINA ACTIVA: solo si estamos editando y tiene rutina ── */}
                         {editando && alumnoEditandoActual?.rutina && (
                             <div style={S.rutinaActivaBox}>
                                 <div style={S.rutinaActivaLeft}>
                                     <RutinaIcon />
                                     <div>
                                         <p style={S.rutinaActivaLabel}>Rutina activa</p>
-                                        <p style={S.rutinaActivaNombre}>
-                                            {alumnoEditandoActual.rutina.nombre || "Sin nombre"}
-                                        </p>
+                                        <p style={S.rutinaActivaNombre}>{alumnoEditandoActual.rutina.nombre || "Sin nombre"}</p>
                                     </div>
                                 </div>
-                                <button
-                                    style={S.btnQuitarRutina}
-                                    onClick={() => setConfirmQuitarRutina(alumnoEditandoActual)}
-                                >
+                                <button style={S.btnQuitarRutina} onClick={() => setConfirmQuitarRutina(alumnoEditandoActual)}>
                                     <DeleteIcon size={13} color="#c0392b" />
                                     Quitar
                                 </button>
@@ -441,12 +582,10 @@ export default function Inicio() {
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
                         </svg>
-                        <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--color-primary)", margin: "12px 0 8px" }}>
-                            ¿Quitar rutina?
-                        </h2>
+                        <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--color-primary)", margin: "12px 0 8px" }}>¿Quitar rutina?</h2>
                         <p style={{ color: "var(--color-text-muted)", fontSize: 14, margin: "0 0 24px" }}>
                             Se va a quitar <strong>"{confirmQuitarRutina.rutina?.nombre}"</strong> de {confirmQuitarRutina.nombre} {confirmQuitarRutina.apellido}.<br />
-                            <span style={{ fontSize: 12 }}>La rutina no se elimina, solo se desvincula del alumno.</span>
+                            <span style={{ fontSize: 12 }}>Se guardará en el historial antes de quitarla.</span>
                         </p>
                         <div style={S.modalActions}>
                             <button style={S.btnCancelar} onClick={() => setConfirmQuitarRutina(null)}>Cancelar</button>
@@ -481,8 +620,8 @@ export default function Inicio() {
 function StatCard({ label, value, color }) {
     return (
         <div style={{ background: "white", borderRadius: "var(--radius-md)", padding: "1rem", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", borderTop: `4px solid ${color}` }}>
-            <p className="stat-card-label" style={{ fontSize: "13px", color: "var(--color-text-muted)", margin: "0 0 6px", fontWeight: "500" }}>{label}</p>
-            <p className="stat-card-value" style={{ fontSize: "36px", fontWeight: "700", margin: 0, color }}>{value}</p>
+            <p style={{ fontSize: "13px", color: "var(--color-text-muted)", margin: "0 0 6px", fontWeight: "500" }}>{label}</p>
+            <p style={{ fontSize: "36px", fontWeight: "700", margin: 0, color }}>{value}</p>
         </div>
     );
 }
@@ -494,25 +633,15 @@ function ShareIcon() { return <svg width="15" height="15" viewBox="0 0 24 24" fi
 function CopyIcon({ size = 15 }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>; }
 function WhatsAppIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>; }
 function DeleteIcon({ size = 15, color = "currentColor" }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>; }
+function HistorialIcon({ size = 15, color = "currentColor" }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>; }
 
 const S = {
-    statCard: { background: "white", borderRadius: "var(--radius-md)", padding: "1.5rem", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" },
-    statLabel: { fontSize: "13px", color: "var(--color-text-muted)", margin: "0 0 8px", fontWeight: "500" },
-    statValue: { fontSize: "36px", fontWeight: "700", margin: 0 },
-    toolbar: { display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap" },
-    search: { flex: "1", minWidth: "200px", padding: "9px 14px", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", fontSize: "14px", color: "var(--color-text)", background: "white", outline: "none" },
-    filtros: { display: "flex", gap: "8px", flexWrap: "wrap" },
     filtroBtn: { padding: "8px 16px", borderRadius: "var(--radius-sm)", border: "1.5px solid var(--color-border)", background: "white", color: "var(--color-primary)", fontSize: "13px", cursor: "pointer", fontWeight: "500" },
     filtroBtnActive: { background: "var(--color-primary)", color: "white", borderColor: "var(--color-primary)" },
     btnNuevo: { padding: "9px 20px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-sm)", fontSize: "14px", fontWeight: "500", cursor: "pointer" },
-    tableWrap: { background: "white", borderRadius: "var(--radius-md)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" },
-    table: { width: "100%", borderCollapse: "collapse" },
-    th: { padding: "12px 16px", textAlign: "left", fontSize: "12px", fontWeight: "600", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1.5px solid #e8f5ee", background: "#f6fdf9" },
-    tr: { borderBottom: "1px solid #f0faf5" },
-    td: { padding: "13px 16px", fontSize: "14px", color: "var(--color-text)" },
     empty: { padding: "3rem", textAlign: "center", color: "var(--color-text-muted)", fontSize: "14px" },
     badge: { display: "inline-block", padding: "3px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: "500" },
-    acciones: { display: "flex", gap: "8px", alignItems: "center" },
+    acciones: { display: "flex", gap: "6px", alignItems: "center" },
     iconBtn: { background: "none", border: "none", cursor: "pointer", color: "var(--color-primary)", padding: "4px", borderRadius: "4px", display: "flex", alignItems: "center" },
     overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: "1rem" },
     modal: { background: "white", borderRadius: "var(--radius-lg)", padding: "2rem", width: "100%", maxWidth: "440px", boxShadow: "0 8px 32px rgba(0,0,0,0.12)" },
@@ -524,14 +653,29 @@ const S = {
     modalActions: { display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "1.5rem" },
     btnCancelar: { padding: "10px 20px", background: "white", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", fontSize: "14px", cursor: "pointer", color: "var(--color-text)" },
     btnGuardar: { padding: "10px 20px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-sm)", fontSize: "14px", fontWeight: "500", cursor: "pointer" },
-    // Rutina activa dentro del modal
     rutinaActivaBox: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f6fdf9", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "10px 14px", marginBottom: "1rem" },
     rutinaActivaLeft: { display: "flex", alignItems: "center", gap: 10, color: "var(--color-primary)" },
     rutinaActivaLabel: { fontSize: "11px", fontWeight: "600", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 2px" },
     rutinaActivaNombre: { fontSize: "13px", fontWeight: "600", color: "var(--color-primary)", margin: 0 },
     btnQuitarRutina: { display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "#fff5f5", border: "1.5px solid #f5c0c0", borderRadius: "var(--radius-sm)", color: "#c0392b", fontSize: "12px", fontWeight: "500", cursor: "pointer" },
-    // Compartir
     shareLabel: { fontSize: 12, fontWeight: 600, color: "var(--color-primary)", letterSpacing: "0.04em", textTransform: "uppercase", margin: "0 0 6px" },
     urlBox: { background: "#f6fdf9", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "10px 14px", fontSize: 12, color: "var(--color-text-muted)", fontFamily: "monospace", wordBreak: "break-all", marginBottom: 14 },
     btnShare: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "12px", borderRadius: "var(--radius-sm)", border: "none", color: "white", fontSize: 14, fontWeight: 500, cursor: "pointer" },
+    // Historial
+    historialCard: { background: "#f6fdf9", border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "12px 14px" },
+    historialCardTop: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+    historialNombre: { fontSize: 14, fontWeight: 600, color: "var(--color-primary)", margin: 0 },
+    historialFecha: { fontSize: 12, color: "var(--color-text)", fontWeight: 500 },
+    btnVerRutina: { padding: "6px 14px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-sm)", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 },
+    // Vista previa rutina
+    semanaPreview: { border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", marginBottom: 12, overflow: "hidden" },
+    semanaPreviewHeader: { background: "#eafaf4", padding: "8px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" },
+    semanaPreviewTitle: { fontSize: 13, fontWeight: 600, color: "var(--color-primary)" },
+    diaPreview: { background: "#f9fffe", border: "1px solid #e8f5ee", borderRadius: 6, padding: "10px 12px", marginBottom: 8 },
+    diaPreviewNombre: { fontSize: 13, fontWeight: 700, color: "var(--color-primary)", margin: "0 0 8px", borderBottom: "1px dashed var(--color-border)", paddingBottom: 4 },
+    etapaPreviewLabel: { fontSize: 10, fontWeight: 700, color: "var(--color-primary-2)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 5px" },
+    ejPreviewRow: { display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: "1px solid #f0faf5", flexWrap: "wrap" },
+    ejPreviewNombre: { fontSize: 13, fontWeight: 500, color: "var(--color-text)", flex: 1, minWidth: 120 },
+    ejPreviewMeta: { fontSize: 12, fontWeight: 600, color: "var(--color-primary)", background: "#eafaf4", padding: "2px 8px", borderRadius: 20, flexShrink: 0 },
+    ejPreviewObs: { fontSize: 11, color: "var(--color-text-muted)", fontStyle: "italic" },
 };
